@@ -19,12 +19,12 @@ cdef extern from "Python.h":
     ctypedef struct PyStringObject:
         long ob_shash
 
-    
+
 #------------------------------------------------------------------------------
 # CHasTraits class
 #------------------------------------------------------------------------------
 
-cdef class CHasTraits(object):
+cdef class CHasTraits:
 
     cdef dict obj_dict
 
@@ -33,7 +33,7 @@ cdef class CHasTraits(object):
         # need to call the generic getattr here because 
         # __getattribute__ depends on this dict existing
         self.obj_dict = <dict>PyObject_GenericGetAttr(self, '__dict__')
-        
+
     def __getattribute__(self, name):
         # short circuit the normal lookup chain if the value
         # is in the obj_dict. This means that 
@@ -60,7 +60,6 @@ cdef class CHasTraits(object):
         return PyObject_GenericGetAttr(self, name)
 
 
-        
 #------------------------------------------------------------------------------
 # cTrait Types
 #------------------------------------------------------------------------------
