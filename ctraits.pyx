@@ -5,7 +5,8 @@ cdef extern from "Python.h":
     object PyObject_GenericGetAttr(object, object)
     long PyObject_Hash(object)
     int PyString_CheckExact(object)
-    int PyString_Check(object)
+    
+    PyObject** _PyObject_GetDictPtr(PyObject*)
 
     ctypedef struct PyDictEntry:
         Py_ssize_t me_hash
@@ -25,37 +26,41 @@ cdef extern from "Python.h":
 
 cdef class CHasTraits(object):
 
-    cdef dict trait_value_dict
+    cdef dict obj_dict
 
     def __cinit__(self):
-        self.trait_value_dict = {}
-
+        # grab a reference to the object's dict
+        # need to call the generic getattr here because 
+        # __getattribute__ depends on this dict existing
+        self.obj_dict = <dict>PyObject_GenericGetAttr(self, '__dict__')
+        
     def __getattribute__(self, name):
         # short circuit the normal lookup chain if the value
-        # is in the trait_value_dict. This means that 
-        # delegates cannot set values in the trait_value_dict
+        # is in the obj_dict. This means that 
+        # delegates cannot set values in the obj_dict
         # but must return the values from the delegated object
         # instead (as one would expect).
-        cdef PyDictObject* trait_value_dict = <PyDictObject*>self.trait_value_dict
+        cdef PyDictObject* obj_dict = <PyDictObject*>self.obj_dict
         cdef long hash_
         cdef PyObject* value
 
+        # This hack is basically just the innards of PyDict_GetItem.
+        # The saving is in not making the function call.
         if PyString_CheckExact(name):
             hash_ = (<PyStringObject*>name).ob_shash
             if hash_ == -1:
                 hash_ = PyObject_Hash(name)
-            value = trait_value_dict.ma_lookup(trait_value_dict, name, hash_).me_value
-            if value != NULL:
-                return <object>value
-        elif PyString_Check(name):
-            hash_ = PyObject_Hash(name)
-            value = trait_value_dict.ma_lookup(trait_value_dict, name, hash_).me_value
+            value = obj_dict.ma_lookup(obj_dict, name, hash_).me_value
             if value != NULL:
                 return <object>value
 
+        # we don't really need the rest of the original traits
+        # performance hack. This generic getattr will handle the
+        # edge cases it was handling.
         return PyObject_GenericGetAttr(self, name)
 
 
+        
 #------------------------------------------------------------------------------
 # cTrait Types
 #------------------------------------------------------------------------------
@@ -83,28 +88,28 @@ cdef class CTrait:
         self.py_validate = validate
 
     def __get__(self, obj, cls):
-        cdef dict trait_value_dict
+        cdef dict obj_dict
         name = self._name
 
         if obj is None:
             raise AttributeError('type object `%s` has no attribute `%s`'
                                  % (cls.__name__, name))
         else:
-            trait_value_dict = (<CHasTraits>obj).trait_value_dict
+            obj_dict = (<CHasTraits>obj).obj_dict
             try:
-                res = trait_value_dict[name]
+                res = obj_dict[name]
             except KeyError:
                 res = self._validate(obj, name, self._default_value(obj, name))
-                trait_value_dict[name] = res
+                obj_dict[name] = res
         
         return res
 
     def __set__(self, obj, val):
-        cdef dict trait_value_dict = (<CHasTraits>obj).trait_value_dict
+        cdef dict obj_dict = (<CHasTraits>obj).obj_dict
         name = self._name
         new = self._validate(obj, name, val)
-        old = trait_value_dict[name]
-        trait_value_dict[name] = new
+        old = obj_dict[name]
+        obj_dict[name] = new
         self.notify(obj, name, old, new)
 
     property name:
