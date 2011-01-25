@@ -1,5 +1,24 @@
+from cpython cimport PyObject
 
 
+cdef extern from "Python.h":
+    object PyObject_GenericGetAttr(object, object)
+    long PyObject_Hash(object)
+    int PyString_CheckExact(object)
+    int PyString_Check(object)
+
+    ctypedef struct PyDictEntry:
+        Py_ssize_t me_hash
+        PyObject* me_key
+        PyObject* me_value
+
+    ctypedef struct PyDictObject:
+        PyDictEntry* ma_lookup(PyDictObject*, object, long)
+
+    ctypedef struct PyStringObject:
+        long ob_shash
+
+    
 #------------------------------------------------------------------------------
 # CHasTraits class
 #------------------------------------------------------------------------------
@@ -17,12 +36,24 @@ cdef class CHasTraits(object):
         # delegates cannot set values in the trait_value_dict
         # but must return the values from the delegated object
         # instead (as one would expect).
-        cdef dict trait_value_dict = self.trait_value_dict
-        if name in trait_value_dict:
-            res = trait_value_dict[name]
-        else:
-            res = object.__getattribute__(self, name)
-        return res
+        cdef PyDictObject* trait_value_dict = <PyDictObject*>self.trait_value_dict
+        cdef long hash_
+        cdef PyObject* value
+
+        if PyString_CheckExact(name):
+            hash_ = (<PyStringObject*>name).ob_shash
+            if hash_ == -1:
+                hash_ = PyObject_Hash(name)
+            value = trait_value_dict.ma_lookup(trait_value_dict, name, hash_).me_value
+            if value != NULL:
+                return <object>value
+        elif PyString_Check(name):
+            hash_ = PyObject_Hash(name)
+            value = trait_value_dict.ma_lookup(trait_value_dict, name, hash_).me_value
+            if value != NULL:
+                return <object>value
+
+        return PyObject_GenericGetAttr(self, name)
 
 
 #------------------------------------------------------------------------------
@@ -190,4 +221,11 @@ cdef class CDict(CTrait):
         validation_error(obj, name, val, dict)
 
 
+cdef class CAny(CTrait):
+
+    cdef inline default_value(self, obj, name):
+        return None
+
+    cdef inline validate(self, obj, name, val):
+        return val
 

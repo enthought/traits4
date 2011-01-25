@@ -131,3 +131,6 @@ class Tuple(CTuple):
 class Dict(CDict):
     pass
 
+
+class Any(CAny):
+    pass
