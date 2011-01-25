@@ -6,10 +6,23 @@
 
 cdef class CHasTraits(object):
 
-    cdef dict trait_dict
+    cdef dict trait_value_dict
 
     def __cinit__(self):
-        self.trait_dict = {}
+        self.trait_value_dict = {}
+
+    def __getattribute__(self, name):
+        # short circuit the normal lookup chain if the value
+        # is in the trait_value_dict. This means that 
+        # delegates cannot set values in the trait_value_dict
+        # but must return the values from the delegated object
+        # instead (as one would expect).
+        cdef dict trait_value_dict = self.trait_value_dict
+        if name in trait_value_dict:
+            res = trait_value_dict[name]
+        else:
+            res = object.__getattribute__(self, name)
+        return res
 
 
 #------------------------------------------------------------------------------
@@ -39,28 +52,28 @@ cdef class CTrait:
         self.py_validate = validate
 
     def __get__(self, obj, cls):
-        cdef dict trait_dict
+        cdef dict trait_value_dict
         name = self._name
 
         if obj is None:
             raise AttributeError('type object `%s` has no attribute `%s`'
                                  % (cls.__name__, name))
         else:
-            trait_dict = (<CHasTraits>obj).trait_dict
+            trait_value_dict = (<CHasTraits>obj).trait_value_dict
             try:
-                res = trait_dict[name]
+                res = trait_value_dict[name]
             except KeyError:
                 res = self._validate(obj, name, self._default_value(obj, name))
-                trait_dict[name] = res
+                trait_value_dict[name] = res
         
         return res
 
     def __set__(self, obj, val):
-        cdef dict trait_dict = (<CHasTraits>obj).trait_dict
+        cdef dict trait_value_dict = (<CHasTraits>obj).trait_value_dict
         name = self._name
         new = self._validate(obj, name, val)
-        old = trait_dict[name]
-        trait_dict[name] = new
+        old = trait_value_dict[name]
+        trait_value_dict[name] = new
         self.notify(obj, name, old, new)
 
     property name:
