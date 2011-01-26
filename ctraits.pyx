@@ -1,8 +1,11 @@
+import sys
+
 from cpython cimport PyObject
 
 
 cdef extern from "Python.h":
     object PyObject_GenericGetAttr(object, object)
+    int PyObject_GenericSetAttr(object, object, object) except -1
     long PyObject_Hash(object)
     int PyString_CheckExact(object)
     
@@ -20,6 +23,10 @@ cdef extern from "Python.h":
         long ob_shash
 
 
+# Forward declarations
+cdef class CTrait
+
+
 #------------------------------------------------------------------------------
 # CHasTraits class
 #------------------------------------------------------------------------------
@@ -27,6 +34,7 @@ cdef extern from "Python.h":
 cdef class CHasTraits:
 
     cdef dict obj_dict
+    cdef dict itrait_dict
 
     def __cinit__(self):
         # grab a reference to the object's dict
@@ -34,30 +42,75 @@ cdef class CHasTraits:
         # __getattribute__ depends on this dict existing
         self.obj_dict = <dict>PyObject_GenericGetAttr(self, '__dict__')
 
-    def __getattribute__(self, name):
+    def __getattribute__(self, bytes name):
         # short circuit the normal lookup chain if the value
         # is in the obj_dict. This means that 
         # delegates cannot set values in the obj_dict
         # but must return the values from the delegated object
         # instead (as one would expect).
-        cdef PyDictObject* obj_dict = <PyDictObject*>self.obj_dict
+        cdef PyDictObject* dct = <PyDictObject*>self.obj_dict
         cdef long hash_
         cdef PyObject* value
 
         # This hack is basically just the innards of PyDict_GetItem.
         # The saving is in not making the function call.
-        if PyString_CheckExact(name):
-            hash_ = (<PyStringObject*>name).ob_shash
-            if hash_ == -1:
-                hash_ = PyObject_Hash(name)
-            value = obj_dict.ma_lookup(obj_dict, name, hash_).me_value
+        hash_ = (<PyStringObject*>name).ob_shash
+        if hash_ == -1:
+            hash_ = PyObject_Hash(name)
+        value = dct.ma_lookup(dct, name, hash_).me_value
+        if value != NULL:
+            return <object>value
+
+        # if we have instance traits, then self.instance_traits
+        # will be a dict instead of None. The instance traits
+        # have priority over the class traits, so we need to 
+        # manually fire the descriptor in that case. 
+        if self.itrait_dict is not None:
+            dct = <PyDictObject*>self.itrait_dict
+            value = dct.ma_lookup(dct, name, hash_).me_value
             if value != NULL:
-                return <object>value
+                return (<CTrait>value).__c_get__(self, <object>((<PyObject*>self).ob_type))
 
         # we don't really need the rest of the original traits
         # performance hack. This generic getattr will handle the
         # edge cases it was handling.
         return PyObject_GenericGetAttr(self, name)
+    
+    def __setattr__(self, bytes name, val):
+        # in order to support instance traits, we need to manually 
+        # dispatch the desciptor for the instance traits if the
+        # object is using them.
+        cdef PyDictObject* dct
+        cdef long hash_
+        cdef PyObject* value
+        
+        if self.itrait_dict is not None:
+            hash_ = (<PyStringObject*>name).ob_shash
+            if hash_ == -1:
+                hash_ = PyObject_Hash(name)
+            dct = <PyDictObject*>self.itrait_dict
+            value = dct.ma_lookup(dct, name, hash_).me_value
+            if value != NULL:
+                (<CTrait>value).__c_set__(self, val)
+                return
+
+        PyObject_GenericSetAttr(self, name, val)
+
+    def add_trait(self, bytes name, CTrait trait):
+        # We lazily add the itrait dict to save memory and 
+        # keep things faster. A None check is a just a pointer
+        # comparison in C, so __getattribute__ remains fast 
+        # for most objects which don't use instance traits.
+        if self.itrait_dict is None:
+            self.itrait_dict = {}
+        trait._name = name
+        self.itrait_dict[name] = trait
+
+        # The above mimics the current traits' add_trait behavior 
+        # we may want to consider making a call to the instance
+        # traits __c_get__ so that it can set its default value
+        # in the object's dict immediately.
+        
 
 
 #------------------------------------------------------------------------------
@@ -77,7 +130,7 @@ cdef validation_error(obj, name, val, type_):
 
 cdef class CTrait:
 
-    cdef str _name
+    cdef bytes _name
     cdef object _notifier
     cdef object py_default_value
     cdef object py_validate
@@ -87,6 +140,14 @@ cdef class CTrait:
         self.py_validate = validate
 
     def __get__(self, obj, cls):
+        return self.__c_get__(obj, cls)
+
+    def __set__(self, obj, val):
+        self.__c_set__(obj, val)
+
+    cdef inline __c_get__(self, obj, cls):
+        # C-level implementation of the `get` descriptor for fast
+        # manual dispatching
         cdef dict obj_dict
         name = self._name
 
@@ -103,7 +164,9 @@ cdef class CTrait:
         
         return res
 
-    def __set__(self, obj, val):
+    cdef inline __c_set__(self, obj, val):
+        # C-level implementation of the  `set` descriptor for 
+        # fast manual dispatching
         cdef dict obj_dict = (<CHasTraits>obj).obj_dict
         name = self._name
         new = self._validate(obj, name, val)
@@ -116,7 +179,7 @@ cdef class CTrait:
         def __get__(self):
             return self._name
 
-        def __set__(self, str val):
+        def __set__(self, bytes val):
             self._name = val
    
     property notifier:
