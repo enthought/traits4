@@ -106,11 +106,11 @@ cdef class CHasTraits:
         trait._name = name
         self.itrait_dict[name] = trait
 
-        # The above mimics the current traits' add_trait behavior 
-        # we may want to consider making a call to the instance
-        # traits __c_get__ so that it can set its default value
-        # in the object's dict immediately.
-        
+        # we need to remove the current value in the obj_dict
+        # for the new instance trait, so that the new trait
+        # can compute and return its value.
+        if name in self.obj_dict:
+            del self.obj_dict[name]
 
 
 #------------------------------------------------------------------------------
@@ -156,9 +156,9 @@ cdef class CTrait:
                                  % (cls.__name__, name))
         else:
             obj_dict = (<CHasTraits>obj).obj_dict
-            try:
+            if name in obj_dict:
                 res = obj_dict[name]
-            except KeyError:
+            else:
                 res = self._validate(obj, name, self._default_value(obj, name))
                 obj_dict[name] = res
         
