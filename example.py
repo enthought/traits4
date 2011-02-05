@@ -8,11 +8,11 @@ class Foo(HasTraits):
 
     @on_trait_change('a')
     def printer(self, name, old, new):
-        print 'static printer'
+        print 'static printer', name, old, new
 
 
 def printer(*args):
-    print 'dynamic printer'
+    print 'dynamic printer', args
 
 f = Foo()
 f2 = Foo()
@@ -27,5 +27,9 @@ f.on_trait_change('a', printer)
 
 f.a = 56
 f2.a = 19
+
+del f.a
+
+print 'reset f.a:', f.a
 
 f.a = 'k' # will raise ValidationError
