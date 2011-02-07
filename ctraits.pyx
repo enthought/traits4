@@ -115,6 +115,9 @@ cdef class CTrait:
     def __set__(self, obj, val):
         self.__c_set__(obj, val)
 
+    def __delete__(self, obj):
+        self.__c_del__(obj)
+
     cdef inline __c_get__(self, obj, cls, bint instance=True):
         # C-level implementation of the `get` descriptor for fast
         # manual dispatching
@@ -158,6 +161,18 @@ cdef class CTrait:
                 return (<CTrait>value).__c_set__(obj, val, False)
             
         new = self._validate(obj, name, val)
+        old = obj_dict[name]
+        obj_dict[name] = new
+        self.notify(obj, name, old, new)
+
+    cdef inline __c_del__(self, obj):
+        # C-level implementation of the  `del` descriptor for 
+        # fast manual dispatching
+        # XXX this almost identical to __c_set__
+        # should we overload set val == NULL to handle del ?
+        cdef dict obj_dict = (<CHasTraits>obj).obj_dict
+        name = self._name
+        new = self._validate(obj, name, self._default_value(obj, name))
         old = obj_dict[name]
         obj_dict[name] = new
         self.notify(obj, name, old, new)
