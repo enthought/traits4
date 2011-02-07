@@ -51,7 +51,7 @@ cdef class CHasTraits:
         cdef PyDictObject* dct = <PyDictObject*>self.obj_dict
         cdef long hash_
         cdef PyObject* value
-
+    
         # This hack is basically just the innards of PyDict_GetItem.
         # The saving is in not making the function call.
         hash_ = (<PyStringObject*>name).ob_shash
@@ -60,42 +60,12 @@ cdef class CHasTraits:
         value = dct.ma_lookup(dct, name, hash_).me_value
         if value != NULL:
             return <object>value
-
-        # if we have instance traits, then self.instance_traits
-        # will be a dict instead of None. The instance traits
-        # have priority over the class traits, so we need to 
-        # manually fire the descriptor in that case. 
-        if self.itrait_dict is not None:
-            dct = <PyDictObject*>self.itrait_dict
-            value = dct.ma_lookup(dct, name, hash_).me_value
-            if value != NULL:
-                return (<CTrait>value).__c_get__(self, <object>((<PyObject*>self).ob_type))
-
+    
         # we don't really need the rest of the original traits
         # performance hack. This generic getattr will handle the
         # edge cases it was handling.
         return PyObject_GenericGetAttr(self, name)
     
-    def __setattr__(self, bytes name, val):
-        # in order to support instance traits, we need to manually 
-        # dispatch the desciptor for the instance traits if the
-        # object is using them.
-        cdef PyDictObject* dct
-        cdef long hash_
-        cdef PyObject* value
-        
-        if self.itrait_dict is not None:
-            hash_ = (<PyStringObject*>name).ob_shash
-            if hash_ == -1:
-                hash_ = PyObject_Hash(name)
-            dct = <PyDictObject*>self.itrait_dict
-            value = dct.ma_lookup(dct, name, hash_).me_value
-            if value != NULL:
-                (<CTrait>value).__c_set__(self, val)
-                return
-
-        PyObject_GenericSetAttr(self, name, val)
-
     def add_trait(self, bytes name, CTrait trait):
         # We lazily add the itrait dict to save memory and 
         # keep things faster. A None check is a just a pointer
@@ -145,30 +115,48 @@ cdef class CTrait:
     def __set__(self, obj, val):
         self.__c_set__(obj, val)
 
-    cdef inline __c_get__(self, obj, cls):
+    cdef inline __c_get__(self, obj, cls, bint instance=True):
         # C-level implementation of the `get` descriptor for fast
         # manual dispatching
         cdef dict obj_dict
-        name = self._name
+        cdef dict itrait_dict
 
+        name = self._name
         if obj is None:
             raise AttributeError('type object `%s` has no attribute `%s`'
                                  % (cls.__name__, name))
+        
+        # if the object has instance traits, then obj.itrait_dict
+        # will be a dict instead of None. The instance traits
+        # have priority over the class traits, so we need to 
+        # manually fire the descriptor in that case.
+        itrait_dict = (<CHasTraits>obj).itrait_dict
+        if instance and itrait_dict is not None:
+            if name in itrait_dict:
+                value = itrait_dict[name]
+                return (<CTrait>value).__c_get__(obj, <object>((<PyObject*>obj).ob_type), False)
+
+        obj_dict = (<CHasTraits>obj).obj_dict
+        if name in obj_dict:
+            res = obj_dict[name]
         else:
-            obj_dict = (<CHasTraits>obj).obj_dict
-            if name in obj_dict:
-                res = obj_dict[name]
-            else:
-                res = self._validate(obj, name, self._default_value(obj, name))
-                obj_dict[name] = res
+            res = self._validate(obj, name, self._default_value(obj, name))
+            obj_dict[name] = res
         
         return res
 
-    cdef inline __c_set__(self, obj, val):
+    cdef inline __c_set__(self, obj, val, bint instance=True):
         # C-level implementation of the  `set` descriptor for 
         # fast manual dispatching
         cdef dict obj_dict = (<CHasTraits>obj).obj_dict
+        cdef dict itrait_dict = (<CHasTraits>obj).itrait_dict 
         name = self._name
+
+        if instance and itrait_dict is not None:
+            if name in itrait_dict:
+                value = itrait_dict[name]
+                return (<CTrait>value).__c_set__(obj, val, False)
+            
         new = self._validate(obj, name, val)
         old = obj_dict[name]
         obj_dict[name] = new
