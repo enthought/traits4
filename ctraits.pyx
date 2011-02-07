@@ -6,6 +6,7 @@ from cpython cimport PyObject
 cdef extern from "Python.h":
     object PyObject_GenericGetAttr(object, object)
     int PyObject_GenericSetAttr(object, object, object) except -1
+    int PyObject_DelAttr(object, object) except -1
     long PyObject_Hash(object)
     int PyString_CheckExact(object)
     
@@ -28,6 +29,13 @@ cdef class CTrait
 
 
 #------------------------------------------------------------------------------
+# Constants
+#------------------------------------------------------------------------------
+Undefined = object()
+
+
+
+#------------------------------------------------------------------------------
 # CHasTraits class
 #------------------------------------------------------------------------------
 
@@ -44,16 +52,17 @@ cdef class CHasTraits:
 
     def __getattribute__(self, bytes name):
         # short circuit the normal lookup chain if the value
-        # is in the obj_dict. This means that 
-        # delegates cannot set values in the obj_dict
-        # but must return the values from the delegated object
-        # instead (as one would expect).
+        # is in the obj_dict. This means that delegates cannot 
+        # set values in the obj_dict but must return the values 
+        # from the delegated object instead (as one would expect).
         cdef PyDictObject* dct = <PyDictObject*>self.obj_dict
         cdef long hash_
         cdef PyObject* value
     
         # This hack is basically just the innards of PyDict_GetItem.
-        # The saving is in not making the function call.
+        # The ~25% performance improvement (87ns vs 64ns) comes 
+        # from not making the function call to PyDict_GetItem or 
+        # first checking to see if the attribute is a data descriptor.
         hash_ = (<PyStringObject*>name).ob_shash
         if hash_ == -1:
             hash_ = PyObject_Hash(name)
@@ -61,11 +70,59 @@ cdef class CHasTraits:
         if value != NULL:
             return <object>value
     
-        # we don't really need the rest of the original traits
-        # performance hack. This generic getattr will handle the
-        # edge cases it was handling.
+        # if the object has instance traits, then self.itrait_dict
+        # will be a dict instead of None. The instance traits
+        # have priority over the class traits, so we need to 
+        # manually fire the descriptor in that case. 
+        cdef dict itrait_dict = self.itrait_dict
+
+        if itrait_dict is not None:
+            if name in itrait_dict:
+                value_ = itrait_dict[name]
+                return (<CTrait>value_).__c_get__(self, <object>((<PyObject*>self).ob_type))
+
+        # This will properly propagate to the __get__ method
+        # if the attribute is a class-level data descriptor.
         return PyObject_GenericGetAttr(self, name)
     
+    def __setattr__(self, name, val):
+        # if the object has instance traits, then self.itrait_dict
+        # will be a dict instead of None. The instance traits
+        # have priority over the class traits, so we need to 
+        # manually fire the descriptor in that case.
+        cdef dict itrait_dict = self.itrait_dict
+
+        if itrait_dict is not None:
+            if name in itrait_dict:
+                value = itrait_dict[name]
+                (<CTrait>value).__c_set__(self, val)
+                return 
+        
+        # This will properly propagate to the __set__
+        # method if the attribute is a class-level
+        # data descriptor.
+        PyObject_GenericSetAttr(self, name, val)
+
+    def __delattr__(self, name):
+        # if the object has instance traits, then self.itrait_dict
+        # will be a dict instead of None. The instance traits
+        # have priority over the class traits, so we need to 
+        # manually fire the descriptor in that case.
+        cdef dict itrait_dict = self.itrait_dict
+
+        if itrait_dict is not None:
+            if name in itrait_dict:
+                value = itrait_dict[name]
+                (<CTrait>value).__c_del__(self)
+                return
+
+        # There is no PyObject_GenericDelAttr, but you can trigger 
+        # an equivalent by using the generic setattr with a NULL value.
+        # Using PyObject_DelAttr here will cause infinite recursion.
+        # This will properly propagate to the __delete__ method if the 
+        # attribute is a class-level data descriptor.
+        PyObject_GenericSetAttr(self, name, <object>NULL)
+
     def add_trait(self, bytes name, CTrait trait):
         # We lazily add the itrait dict to save memory and 
         # keep things faster. A None check is a just a pointer
@@ -118,27 +175,31 @@ cdef class CTrait:
     def __delete__(self, obj):
         self.__c_del__(obj)
 
-    cdef inline __c_get__(self, obj, cls, bint instance=True):
+    cdef inline __c_get__(self, obj, cls):
         # C-level implementation of the `get` descriptor for fast
         # manual dispatching
+        #
+        # If obj is None, then the descriptor was called via 
+        # attribute access on the class. In that case the behavior
+        # is undefined and we raise an AttributeError (same behavior
+        # as current traits)
+        #
+        # Otherwise, we check to see if the value is in the object's
+        # __dict__. This is a bit of a redundant check because if it's
+        # True, then the value would have already been returned in
+        # CHasTraits.__getattribute__, but better to play it safe.
+        # The usual behavior is that this method computes the default
+        # value of the trait and stuffs it in the object's __dict__
+        # 
+        # This method (along with __c_set__ and __c_del__) will
+        # need to be overridden by non-standard traits like delegates.
         cdef dict obj_dict
-        cdef dict itrait_dict
 
         name = self._name
         if obj is None:
             raise AttributeError('type object `%s` has no attribute `%s`'
                                  % (cls.__name__, name))
         
-        # if the object has instance traits, then obj.itrait_dict
-        # will be a dict instead of None. The instance traits
-        # have priority over the class traits, so we need to 
-        # manually fire the descriptor in that case.
-        itrait_dict = (<CHasTraits>obj).itrait_dict
-        if instance and itrait_dict is not None:
-            if name in itrait_dict:
-                value = itrait_dict[name]
-                return (<CTrait>value).__c_get__(obj, <object>((<PyObject*>obj).ob_type), False)
-
         obj_dict = (<CHasTraits>obj).obj_dict
         if name in obj_dict:
             res = obj_dict[name]
@@ -148,32 +209,39 @@ cdef class CTrait:
         
         return res
 
-    cdef inline __c_set__(self, obj, val, bint instance=True):
+    cdef inline __c_set__(self, obj, val):
         # C-level implementation of the  `set` descriptor for 
         # fast manual dispatching
+        #
+        # The semantics here are simple. Validate the new 
+        # val. Once validation is complete, retrieve the old
+        # value from the object's __dict__ or Undefined if not
+        # present. Stuff the new value in the dict and call
+        # the notifier.
         cdef dict obj_dict = (<CHasTraits>obj).obj_dict
-        cdef dict itrait_dict = (<CHasTraits>obj).itrait_dict 
         name = self._name
-
-        if instance and itrait_dict is not None:
-            if name in itrait_dict:
-                value = itrait_dict[name]
-                return (<CTrait>value).__c_set__(obj, val, False)
-            
         new = self._validate(obj, name, val)
-        old = obj_dict[name]
+        if name in obj_dict:
+            old = obj_dict[name]
+        else:
+            old = Undefined
         obj_dict[name] = new
         self.notify(obj, name, old, new)
 
     cdef inline __c_del__(self, obj):
         # C-level implementation of the  `del` descriptor for 
-        # fast manual dispatching
-        # XXX this almost identical to __c_set__
-        # should we overload set val == NULL to handle del ?
+        # fast manual dispatching. 
+        #
+        # The semantics for del foo.a where 'a' is a trait attribute
+        # is actually to just reset to the default value of the
+        # trait, then call the notifier.
         cdef dict obj_dict = (<CHasTraits>obj).obj_dict
         name = self._name
+        if name in obj_dict:
+            old = obj_dict[name]
+        else:
+            old = Undefined
         new = self._validate(obj, name, self._default_value(obj, name))
-        old = obj_dict[name]
         obj_dict[name] = new
         self.notify(obj, name, old, new)
 
