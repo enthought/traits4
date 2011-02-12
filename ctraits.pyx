@@ -157,14 +157,15 @@ cdef validation_error(obj, name, val, type_):
 
 cdef class CTrait:
 
-    cdef bytes _name
-    cdef object _notifier
+    cdef bytes py_name
+    cdef object py_dispatcher
     cdef object py_default_value
-    cdef object py_validate
+    cdef object py_validator
 
-    def __init__(self, default_value=None, validate=None):
+    def __init__(self, default_value=None, validator=None, dispatcher=None):
         self.py_default_value = default_value
-        self.py_validate = validate
+        self.py_validator = validator
+        self.py_dispatcher = dispatcher
 
     def __get__(self, obj, cls):
         return self.__c_get__(obj, cls)
@@ -195,7 +196,7 @@ cdef class CTrait:
         # need to be overridden by non-standard traits like delegates.
         cdef dict obj_dict
 
-        name = self._name
+        name = self.py_name
         if obj is None:
             raise AttributeError('type object `%s` has no attribute `%s`'
                                  % (cls.__name__, name))
@@ -219,14 +220,14 @@ cdef class CTrait:
         # present. Stuff the new value in the dict and call
         # the notifier.
         cdef dict obj_dict = (<CHasTraits>obj).obj_dict
-        name = self._name
+        name = self.py_name
         new = self._validate(obj, name, val)
         if name in obj_dict:
             old = obj_dict[name]
         else:
             old = Undefined
         obj_dict[name] = new
-        self.notify(obj, name, old, new)
+        self._dispatch(obj, name, old, new)
 
     cdef inline __c_del__(self, obj):
         # C-level implementation of the  `del` descriptor for 
@@ -236,58 +237,78 @@ cdef class CTrait:
         # is actually to just reset to the default value of the
         # trait, then call the notifier.
         cdef dict obj_dict = (<CHasTraits>obj).obj_dict
-        name = self._name
+        name = self.py_name
         if name in obj_dict:
             old = obj_dict[name]
         else:
             old = Undefined
         new = self._validate(obj, name, self._default_value(obj, name))
         obj_dict[name] = new
-        self.notify(obj, name, old, new)
+        self._dispatch(obj, name, old, new)
 
     property name:
         
         def __get__(self):
-            return self._name
+            return self.py_name
 
         def __set__(self, bytes val):
-            self._name = val
+            self.py_name = val
    
-    property notifier:
+    property dispatcher:
         
         def __get__(self):
-            return self._notifier
+            return self.py_dispatcher
 
         def __set__(self, val):
-            self._notifier = val
+            self.py_dispatcher = val
+
+    property default_value:
+
+        def __get__(self):
+            return self.py_default_value
+
+        def __set__(self, val):
+            self.py_default_value = val
+
+    property validator:
+
+        def __get__(self):
+            return self.py_validator
+
+        def __set__(self, val):
+            self.py_validator = val
 
     cdef inline _default_value(self, obj, name):
         if self.py_default_value is not None:
             return self.py_default_value(obj, name)
-        return self.default_value(obj, name)
+        return self.c_default_value(obj, name)
 
     cdef inline _validate(self, obj, name, val):
-        if self.py_validate is not None:
-            return self.py_validate(obj, name, val)
-        return self.validate(obj, name, val)
+        if self.py_validator is not None:
+            return self.py_validator(obj, name, val)
+        return self.c_validate(obj, name, val)
+    
+    cdef inline _dispatch(self, obj, name, old, new):
+        if self.py_dispatcher is not None:
+            return self.py_dispatcher(self, obj, name, old, new)
+        return self.c_dispatch(self, obj, name, old, new)
 
-    cdef inline default_value(self, obj, name):
+    cdef inline c_default_value(self, obj, name):
         raise NotImplementedError
 
-    cdef inline validate(self, obj, name, val):
+    cdef inline c_validate(self, obj, name, val):
         raise NotImplementedError
 
-    cdef inline notify(self, obj, name, old, new):
-        if self._notifier is not None:
-            self._notifier(self, obj, name, old, new)
+    cdef inline c_dispatch(self, trait, obj, name, old, new):
+        raise NotImplementedError
 
 
 cdef class CInt(CTrait):
 
-    cdef inline default_value(self, obj, name):
+    cdef inline c_default_value(self, obj, name):
         return 0
 
-    cdef inline validate(self, obj, name, val):
+    cdef inline c_validate(self, obj, name, val):
         if isinstance(val, int):
             return val
         validation_error(obj, name, val, int)
@@ -295,10 +316,10 @@ cdef class CInt(CTrait):
 
 cdef class CFloat(CTrait):
 
-    cdef inline default_value(self, obj, name):
+    cdef inline c_default_value(self, obj, name):
         return 0.0
 
-    cdef inline validate(self, obj, name, val):
+    cdef inline c_validate(self, obj, name, val):
         if isinstance(val, float):
             return val
         validation_error(obj, name, val, float)
@@ -306,10 +327,10 @@ cdef class CFloat(CTrait):
 
 cdef class CLong(CTrait):
 
-    cdef inline default_value(self, obj, name):
+    cdef inline c_default_value(self, obj, name):
         return 0L
 
-    cdef inline validate(self, obj, name, val):
+    cdef inline c_validate(self, obj, name, val):
         if isinstance(val, long):
             return val
         validation_error(obj, name, val, long)
@@ -317,10 +338,10 @@ cdef class CLong(CTrait):
 
 cdef class CStr(CTrait):
 
-    cdef inline default_value(self, obj, name):
+    cdef inline c_default_value(self, obj, name):
         return ''
 
-    cdef inline validate(self, obj, name, val):
+    cdef inline c_validate(self, obj, name, val):
         if isinstance(val, basestring):
             return val
         validation_error(obj, name, val, basestring)
@@ -328,10 +349,10 @@ cdef class CStr(CTrait):
 
 cdef class CList(CTrait):
 
-    cdef inline default_value(self, obj, name):
+    cdef inline c_default_value(self, obj, name):
         return []
 
-    cdef inline validate(self, obj, name, val):
+    cdef inline c_validate(self, obj, name, val):
         if isinstance(val, list):
             return val
         validation_error(obj, name, val, list)
@@ -339,10 +360,10 @@ cdef class CList(CTrait):
 
 cdef class CTuple(CTrait):
 
-    cdef inline default_value(self, obj, name):
+    cdef inline c_default_value(self, obj, name):
         return ()
 
-    cdef inline validate(self, obj, name, val):
+    cdef inline c_validate(self, obj, name, val):
         if isinstance(val, tuple):
             return val
         validation_error(obj, name, val, tuple)
@@ -350,10 +371,10 @@ cdef class CTuple(CTrait):
 
 cdef class CDict(CTrait):
 
-    cdef inline default_value(self, obj, name):
+    cdef inline c_default_value(self, obj, name):
         return {}
 
-    cdef inline validate(self, obj, name, val):
+    cdef inline c_validate(self, obj, name, val):
         if isinstance(val, dict):
             return val
         validation_error(obj, name, val, dict)
@@ -361,9 +382,9 @@ cdef class CDict(CTrait):
 
 cdef class CAny(CTrait):
 
-    cdef inline default_value(self, obj, name):
+    cdef inline c_default_value(self, obj, name):
         return None
 
-    cdef inline validate(self, obj, name, val):
+    cdef inline c_validate(self, obj, name, val):
         return val
 
