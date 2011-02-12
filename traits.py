@@ -2,96 +2,8 @@ from ctraits import *
 from weakref import ref, WeakKeyDictionary
 import types
 
-class Notifier(object):
 
-    __slots__ = ('handler_ref', 'arg_handler')
-
-    def __init__(self, handler):
-        self.handler_ref = ref(handler)
-        arg_count = handler.func_code.co_argcount
-        
-        if arg_count == 0:
-            arg_handler = lambda obj, name, old, new: ()
-        elif arg_count == 1:
-            arg_handler = lambda obj, name, old, new: (obj,)
-        elif arg_count == 2:
-            arg_handler = lambda obj, name, old, new: (obj, new)
-        elif arg_count == 3:
-            arg_handler = lambda obj, name, old, new: (obj, old, new)
-        elif arg_count == 4:
-            arg_handler = lambda obj, name, old, new: (obj, name, old, new) 
-        else:
-            raise TypeError('Handler %s takes incompatible number of args: %s'
-                            % (handler, arg_count))
-
-        self.arg_handler = arg_handler
-
-    def __call__(self, obj, name, old, new):
-        handler = self.handler_ref()
-        if handler is None:
-            return False
-        handler(*self.arg_handler(obj, name, old, new))
-        return True
-
-
-class NotificationMgr(object):
-
-    def __init__(self):
-        self.static_notifiers = WeakKeyDictionary()
-        self.dynamic_notifiers = WeakKeyDictionary()
-
-    def __call__(self, trait, obj, name, old, new):
-        static_notifiers = self.static_notifiers
-        dynamic_notifiers = self.dynamic_notifiers
-
-        # dispatch static handlers
-        if trait in static_notifiers:
-            notifiers = static_notifiers[trait]
-            dead_notifiers = []
-            for notifier in notifiers:
-                if not notifier(obj, name, old, new):
-                    dead_notifiers.append(notifier)
-            if dead_notifiers:
-                for notifier in dead_notifiers:
-                    notifiers.remove(notifier)
-                if not notifiers:
-                    del static_notifiers[trait]
-
-        # dispatch dynamic handlers
-        if trait in dynamic_notifiers:
-            inner = dynamic_notifiers[trait]
-            if obj in inner:
-                notifiers = inner[obj]
-                dead_notifiers = []
-                for notifier in notifiers:
-                    if not notifier(obj, name, old, new):
-                        dead_notifiers.append(notifier)
-                if dead_notifiers:
-                    for notifier in dead_notifiers:
-                        notifiers.remove(notifier)
-                    if not notifiers:
-                        del inner[obj]
-                        if not inner:
-                            del dynamic_notifiers[trait]
-
-    def add_static_notifier(self, trait, notifier):
-        if trait not in self.static_notifiers:
-            self.static_notifiers[trait] = set()
-        self.static_notifiers[trait].add(notifier)
-
-    def add_dynamic_notifier(self, trait, obj, notifier):
-        if trait not in self.dynamic_notifiers:
-            self.dynamic_notifiers[trait] = WeakKeyDictionary()
-        inner = self.dynamic_notifiers[trait]
-        if obj not in inner:
-            inner[obj] = set()
-        inner[obj].add(notifier)
-
-
-notification_mgr = NotificationMgr()
-
-
-class StaticChangeBinder(object):
+class ChangeBinder(object):
     """ This is just a convienence sentinel. The instances
     are discarded in the MetaHasTraits class. So no worries
     about maintaining false refs to things.
@@ -107,7 +19,7 @@ class StaticChangeBinder(object):
         for name, trait in traits:
             if name in names:
                 trait.notifier = notification_mgr
-                notification_mgr.add_static_notifier(trait, Notifier(self.func))
+                notification_mgr.add_static_notifier(trait, FuncNotifier(self.func))
         return self.func
 
 
@@ -145,7 +57,13 @@ class HasTraits(CHasTraits):
     def on_trait_change(self, name, cb):
         trait = self.__class__.__dict__[name]
         trait.notifier = notification_mgr
-        notification_mgr.add_dynamic_notifier(trait, self, Notifier(cb))
+        if isinstance(cb, types.MethodType):
+            notifier = BoundMethodNotifier(cb)
+        elif isinstance(cb, types.FunctionType):
+            notifiers = FuncNotifier(cb)
+        else:
+            raise TypeError('not yet supported for this type %s' % type(cb))
+        notification_mgr.add_dynamic_notifier(trait, self, notifier)
 
 
 def on_trait_change(names):
