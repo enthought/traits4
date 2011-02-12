@@ -1,26 +1,7 @@
 from ctraits import *
-from weakref import ref, WeakKeyDictionary
 import types
 
-
-class ChangeBinder(object):
-    """ This is just a convienence sentinel. The instances
-    are discarded in the MetaHasTraits class. So no worries
-    about maintaining false refs to things.
-
-    """
-    def __init__(self, names, func):
-        names = names.split(',')
-        self.names = set([name.strip() for name in names])
-        self.func = func
-
-    def __call__(self, traits):
-        names = self.names
-        for name, trait in traits:
-            if name in names:
-                trait.notifier = notification_mgr
-                notification_mgr.add_static_notifier(trait, FuncNotifier(self.func))
-        return self.func
+from notifiers import FunctionNotifier, BoundMethodNotifier, _dispatcher
 
 
 class MetaHasTraits(type):
@@ -42,10 +23,9 @@ class MetaHasTraits(type):
                             trait.name = key
                             traits.append((key, trait))
 
-                    traits_tuple = tuple(traits)
-                    for key, val in dct.items():
-                        if isinstance(val, StaticChangeBinder):
-                            dct[key] = val(traits_tuple)
+                    for name, trait in traits:
+                        if trait.dispatcher is None:
+                            trait.dispatcher = _dispatcher
 
         return type.__new__(meta, name, bases, dct)
 
@@ -54,24 +34,35 @@ class HasTraits(CHasTraits):
     
     __metaclass__ = MetaHasTraits
 
+    def __init__(self, *args, **kwargs):
+        for attr_name, attr in self.__class__.__dict__.iteritems():
+            if hasattr(attr, '__on_trait_change__'):
+                names, kwargs = attr.__on_trait_change__
+                for name in names:
+                    self.on_trait_change(name, getattr(self, attr_name))
+
     def on_trait_change(self, name, cb):
         trait = self.__class__.__dict__[name]
-        trait.notifier = notification_mgr
+        
         if isinstance(cb, types.MethodType):
             notifier = BoundMethodNotifier(cb)
         elif isinstance(cb, types.FunctionType):
-            notifiers = FuncNotifier(cb)
+            notifier = FunctionNotifier(cb)
         else:
             raise TypeError('not yet supported for this type %s' % type(cb))
-        notification_mgr.add_dynamic_notifier(trait, self, notifier)
+
+        dispatcher = trait.dispatcher
+        dispatcher.add_notifier(trait, self, notifier)
 
 
-def on_trait_change(names):
-    if not isinstance(names, basestring):
-        raise TypeError('Names must be a comma separated string.')
+def on_trait_change(*names, **kwargs):
+    for name in names:
+        if not isinstance(name, basestring):
+            raise TypeError('Names must be a string.')
 
     def closure(func):
-        return StaticChangeBinder(names, func)
+        func.__on_trait_change__ = (names, kwargs)
+        return func
 
     return closure
 

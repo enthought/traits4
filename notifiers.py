@@ -30,18 +30,17 @@ class FunctionNotifier(object):
 
 class BoundMethodNotifier(object):
 
-    __slots__ = ('obj_ref', 'func_ref', 'arg_names')
+    __slots__ = ('self_ref', 'func_ref', 'arg_names')
 
     def __init__(self, method):
         self.func_ref = ref(method.im_func)
         self.self_ref = ref(method.im_self)
 
         arg_names = method.im_func.func_code.co_varnames[1:]
-        arg_names = func.func_code.co_varnames
         for name in arg_names:
             if name not in VALID_ARG_NAMES:
                 raise TypeError('Handler `%s` has invalid argument `%s`'
-                                % (func, name))
+                                % (method, name))
 
         self.arg_names = tuple(arg_names)
 
