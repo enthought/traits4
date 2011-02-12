@@ -277,7 +277,7 @@ cdef class CTrait:
     cdef inline validate(self, obj, name, val):
         raise NotImplementedError
 
-    cdef inline void notify(self, obj, name, old, new):
+    cdef inline notify(self, obj, name, old, new):
         if self._notifier is not None:
             self._notifier(self, obj, name, old, new)
 
