@@ -241,7 +241,8 @@ cdef class CTrait:
         if name in obj_dict:
             old = obj_dict[name]
         else:
-            old = Undefined
+            # already have the default value, no need to do more
+            return
         new = self._validate(obj, name, self._default_value(obj, name))
         obj_dict[name] = new
         self._dispatch(obj, name, old, new)

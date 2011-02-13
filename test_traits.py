@@ -62,6 +62,30 @@ class BasicTraitsTestCase(unittest.TestCase):
         f.a = 12
         self.assertTrue(self.listener_fired)
 
+        self.listener_fired = False
+        f.a = 12
+        self.assertFalse(self.listener_fired)
+
+    def listener_reset(self, new, old, name, obj):
+        self.assertEquals(obj, self.f)
+        self.assertEquals(name, 'a')
+        self.assertEquals(old, 12)
+        self.assertEquals(new, 0)
+        self.listener_fired = True
+
+    def test_listener_reset(self):
+        self.listener_fired = False
+        f = Foo()
+        self.f = f
+        f.a = 12
+        f.on_trait_change('a', self.listener_reset)
+        del f.a
+        self.assertTrue(self.listener_fired)
+
+        self.listener_fired = False
+        del f.a
+        self.assertFalse(self.listener_fired)
+
 
     def test_class_listener(self):
         self.class_listener_fired = False

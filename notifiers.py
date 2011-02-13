@@ -62,6 +62,8 @@ class Dispatcher(object):
         self.notifiers = WeakKeyDictionary()
 
     def __call__(self, trait, obj, name, old, new):
+        if old == new:
+            return
         all_notifiers = self.notifiers
         if trait in all_notifiers:
             inner = all_notifiers[trait]
