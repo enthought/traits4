@@ -1,7 +1,7 @@
 from weakref import ref, WeakKeyDictionary
 
 
-VALID_ARG_NAMES = {'obj', 'name', 'old', 'new'}
+VALID_ARG_NAMES = set(('obj', 'name', 'old', 'new'))
 
 
 class FunctionNotifier(object):
@@ -23,7 +23,9 @@ class FunctionNotifier(object):
         func = self.func_ref()
         if func is None:
             return False
-        call_kwargs = {name: kwargs[name] for name in self.arg_names}
+        call_kwargs = {}
+        for name in self.arg_names:
+            call_kwargs[name] = kwargs[name]
         func(**call_kwargs)
         return True
 
@@ -51,7 +53,9 @@ class BoundMethodNotifier(object):
         other_self = self.self_ref()
         if other_self is None:
             return False
-        call_kwargs = {name: kwargs[name] for name in self.arg_names}
+        call_kwargs = {}
+        for name in self.arg_names:
+            call_kwargs[name] = kwargs[name]
         func(other_self, **call_kwargs)
         return True
         

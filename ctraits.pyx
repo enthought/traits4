@@ -5,7 +5,10 @@ from cpython cimport PyObject
 
 cdef extern from "Python.h":
     object PyObject_GenericGetAttr(object, object)
-    int PyObject_GenericSetAttr(object, object, object) except -1
+    # XXX - By declaring PyObject*, nothing gets incref'd. This *may*
+    # be a problem, but doesn't seem to be so far. Can't declare as
+    # object or then <object>NULL gets increfd and segfaults.
+    int PyObject_GenericSetAttr(PyObject*, PyObject*, PyObject*) except -1
     int PyObject_DelAttr(object, object) except -1
     long PyObject_Hash(object)
     int PyString_CheckExact(object)
@@ -101,7 +104,7 @@ cdef class CHasTraits:
         # This will properly propagate to the __set__
         # method if the attribute is a class-level
         # data descriptor.
-        PyObject_GenericSetAttr(self, name, val)
+        PyObject_GenericSetAttr(<PyObject*>self, <PyObject*>name, <PyObject*>val)
 
     def __delattr__(self, name):
         # if the object has instance traits, then self.itrait_dict
@@ -121,7 +124,7 @@ cdef class CHasTraits:
         # Using PyObject_DelAttr here will cause infinite recursion.
         # This will properly propagate to the __delete__ method if the 
         # attribute is a class-level data descriptor.
-        PyObject_GenericSetAttr(self, name, <object>NULL)
+        PyObject_GenericSetAttr(<PyObject*>self, <PyObject*>name, NULL)
 
     def add_trait(self, bytes name, CTrait trait):
         # We lazily add the itrait dict to save memory and 
