@@ -4,6 +4,15 @@ from notifiers import Dispatcher
 class QueueDispatcher(Dispatcher):
     """ This is a dispatcher which instead of notifying immediately,
     calls notifiers with changes in the order in which they occur.
+    
+    This is essentially 'breadth-first' dispatching.
+    
+    Some consequences of this:
+      - each trait's set of notifiers runs to completion before any other trait
+        is run
+      - there is no guarantee that new is equal to the current value of the
+        trait (something else may have changed the value before the current
+        listener gets to run)
     """
 
     def __init__(self):
