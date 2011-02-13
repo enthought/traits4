@@ -216,7 +216,7 @@ cdef class CTrait:
         #
         # The semantics here are simple. Validate the new 
         # val. Once validation is complete, retrieve the old
-        # value from the object's __dict__ or Undefined if not
+        # value from the object's __dict__ or the default if not
         # present. Stuff the new value in the dict and call
         # the notifier.
         cdef dict obj_dict = (<CHasTraits>obj).obj_dict
@@ -225,7 +225,7 @@ cdef class CTrait:
         if name in obj_dict:
             old = obj_dict[name]
         else:
-            old = Undefined
+            old = self._default_value(obj, name)
         obj_dict[name] = new
         self._dispatch(obj, name, old, new)
 
