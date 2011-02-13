@@ -35,6 +35,11 @@ class HasTraits(CHasTraits):
     __metaclass__ = MetaHasTraits
 
     def __init__(self, *args, **kwargs):
+        # set default values
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+        
+        # hook up listeners
         for attr_name, attr in self.__class__.__dict__.iteritems():
             if hasattr(attr, '__on_trait_change__'):
                 names, kwargs = attr.__on_trait_change__
