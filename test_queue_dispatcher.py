@@ -2,16 +2,13 @@ import unittest
 import notifiers
 from queue_dispatcher import _queue_dispatcher
 
-# monkeypatch!
-notifiers._dispatcher = _queue_dispatcher
-
 from test_traits import *
 
 class Bar(HasTraits):
-    a = Int
-    b = Int
-    c = Int
-    d = Int
+    a = Int(dispatcher=_queue_dispatcher)
+    b = Int(dispatcher=_queue_dispatcher)
+    c = Int(dispatcher=_queue_dispatcher)
+    d = Int(dispatcher=_queue_dispatcher)
 
 class TestQueueDispatcher(unittest.TestCase):
     def a_listener(self, obj, new):

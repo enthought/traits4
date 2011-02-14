@@ -2,18 +2,16 @@ import unittest
 import notifiers
 from stack_dispatcher import _stack_dispatcher
 
-# monkeypatch!
-notifiers._dispatcher = _stack_dispatcher
-
 from test_traits import *
 
 class Bar(HasTraits):
-    a = Int
-    b = Int
-    c = Int
-    d = Int
+    a = Int(dispatcher=_stack_dispatcher)
+    b = Int(dispatcher=_stack_dispatcher)
+    c = Int(dispatcher=_stack_dispatcher)
+    d = Int(dispatcher=_stack_dispatcher)
 
 class TestStackDispatcher(unittest.TestCase):
+
     def a_listener(self, obj, new):
         self.order.append('a')
         obj.b = new+1

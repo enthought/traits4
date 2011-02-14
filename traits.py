@@ -56,8 +56,7 @@ class HasTraits(CHasTraits):
         else:
             raise TypeError('not yet supported for this type %s' % type(cb))
 
-        dispatcher = trait.dispatcher
-        dispatcher.add_notifier(trait, self, notifier)
+        trait.dispatcher.add_notifier(trait, self, notifier)
 
 
 def on_trait_change(*names, **kwargs):

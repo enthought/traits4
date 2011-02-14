@@ -1,5 +1,8 @@
 from weakref import ref, WeakKeyDictionary
+from collections import deque
+
 from notifiers import Dispatcher
+
 
 class CollapsingQueueDispatcher(Dispatcher):
     """ This is a dispatcher which instead of notifying immediately,
@@ -9,10 +12,10 @@ class CollapsingQueueDispatcher(Dispatcher):
     """
 
     def __init__(self):
-        import collections
-        self.notifiers = WeakKeyDictionary()
-        self.queue = collections.deque()
+        super(self.__class__, self).__init__()
+        self.queue = deque()
         self.values = {}
+        self.working = False
 
     def __call__(self, trait, obj, name, old, new):
         if old == new:
@@ -26,15 +29,15 @@ class CollapsingQueueDispatcher(Dispatcher):
         # add our stuff to the end of the queue and our values dict
         self.queue.append((trait, obj, name, old, new))
         self.values[(trait, obj, name)] = (old, new)
-            
         
-        # if we're not the first caller, return immediately
-        if len(self.queue) > 1:
+        if self.working:
             return
         
+        self.working = True
+
         # now process the queue until done
         while self.queue:
-            trait, obj, name, old, new = self.queue[0]
+            trait, obj, name, old, new = self.queue.popleft()
             del self.values[(trait, obj, name)]
             all_notifiers = self.notifiers
             if trait in all_notifiers:
@@ -52,6 +55,7 @@ class CollapsingQueueDispatcher(Dispatcher):
                             del inner[obj]
                             if not inner:
                                 del all_notifiers[trait]
-            self.queue.popleft()
+        
+        self.working = False
 
 _collapsing_queue_dispatcher = CollapsingQueueDispatcher()

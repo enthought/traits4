@@ -8,10 +8,10 @@ notifiers._dispatcher = _collapsing_queue_dispatcher
 from test_traits import *
 
 class Bar(HasTraits):
-    a = Int
-    b = Int
-    c = Int
-    d = Int
+    a = Int(dispatcher=_collapsing_queue_dispatcher)
+    b = Int(dispatcher=_collapsing_queue_dispatcher)
+    c = Int(dispatcher=_collapsing_queue_dispatcher)
+    d = Int(dispatcher=_collapsing_queue_dispatcher)
 
 class TestQueueDispatcher(unittest.TestCase):
     def a_listener(self, obj, new):
