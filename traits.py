@@ -1,7 +1,8 @@
 from ctraits import *
 import types
 
-from notifiers import FunctionNotifier, BoundMethodNotifier, _dispatcher
+from dispatchers import _immediate_dispatcher
+from notifiers import FunctionNotifier, BoundMethodNotifier
 
 
 class MetaHasTraits(type):
@@ -25,7 +26,7 @@ class MetaHasTraits(type):
 
                     for name, trait in traits:
                         if trait.dispatcher is None:
-                            trait.dispatcher = _dispatcher
+                            trait.dispatcher = _immediate_dispatcher
 
         return type.__new__(meta, name, bases, dct)
 

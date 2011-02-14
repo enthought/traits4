@@ -1,5 +1,6 @@
 import unittest
-from traits import *
+
+from ..traits import *
 
 
 class Foo(HasTraits):
@@ -21,6 +22,7 @@ def printer(*args):
 
 
 class BasicTraitsTestCase(unittest.TestCase):
+
     def test_default(self):
         f = Foo()
         self.assertEquals(f.a, 0)
@@ -45,7 +47,6 @@ class BasicTraitsTestCase(unittest.TestCase):
 
         del f.b
         self.assertEquals(f.b, 20)
-
 
     def listener(self, new, old, name, obj):
         self.assertEquals(obj, self.f)
@@ -86,7 +87,6 @@ class BasicTraitsTestCase(unittest.TestCase):
         del f.a
         self.assertFalse(self.listener_fired)
 
-
     def test_class_listener(self):
         self.class_listener_fired = False
         f = Foo()
@@ -94,7 +94,6 @@ class BasicTraitsTestCase(unittest.TestCase):
         f.c = 12
         self.assertTrue(self.class_listener_fired)
 
-    
     def bad_assignment(self):
         f = Foo()
         f.a = 'k'
@@ -102,5 +101,4 @@ class BasicTraitsTestCase(unittest.TestCase):
     def test_validation(self):
         self.assertRaises(ValidationError, self.bad_assignment) # will raise ValidationError
 
-if __name__ == '__main__':
-    unittest.main()
+
