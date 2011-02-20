@@ -142,6 +142,18 @@ cdef class CHasTraits:
         if name in self.obj_dict:
             del self.obj_dict[name]
 
+    def get_trait(self, bytes name):
+        if self.itrait_dict is not None:
+            if name in self.itrait_dict:
+                return self.itrait_dict[name]
+
+        if name in self.__class__.__dict__:
+            trait = self.__class__.__dict__[name]
+            if isinstance(trait, CTrait):
+                return trait
+
+        raise ValueError('Object has no trait named %s' % name)
+
 
 #------------------------------------------------------------------------------
 # cTrait Types

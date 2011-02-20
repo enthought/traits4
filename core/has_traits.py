@@ -43,9 +43,10 @@ class HasTraits(CHasTraits):
         # hook up listeners
         for attr_name, attr in self.__class__.__dict__.iteritems():
             if hasattr(attr, '__on_trait_change__'):
-                names, kwargs = attr.__on_trait_change__
+                (names, kwargs) = attr.__on_trait_change__
                 for name in names:
                     self.on_trait_change(name, getattr(self, attr_name))
+
 
     def on_trait_change(self, name, cb):
         trait = self.__class__.__dict__[name]

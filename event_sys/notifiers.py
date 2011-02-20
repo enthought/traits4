@@ -1,4 +1,4 @@
-from weakref import ref, WeakKeyDictionary
+from weakref import ref
 
 
 VALID_ARG_NAMES = set(('obj', 'name', 'old', 'new'))
