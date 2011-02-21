@@ -6,7 +6,7 @@ class KillSignalException(Exception):
     pass
 
 
-class Signal:
+class Signal(object):
 
     def __init__(self):
         self.heap = []
