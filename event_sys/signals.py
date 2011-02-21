@@ -1,5 +1,4 @@
 from weakref import ref
-
 from heapq import heappush, nsmallest
 
 
@@ -36,6 +35,8 @@ class Signal:
 
         notifiers = nsmallest(len(heap), heap)
 
+        message.initialize()
+
         for item in notifiers:
             notifier = item[2]()
             if notifier is None:
@@ -45,4 +46,8 @@ class Signal:
                     notifier(message)
                 except KillSignalException:
                     break
+                finally:
+                    message.update()
+
+        message.finalize()
 

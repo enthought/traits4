@@ -16,10 +16,10 @@ class QueueDispatcher:
         
         queue = self.queue
         self.working = True
-        
+                
         while queue:
-            op_signal, message = queue.popleft()
-            op_signal.emit(message)
+            op_signal, op_message = queue.popleft()
+            op_signal.emit(op_message)
 
         self.working = False
 
