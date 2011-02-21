@@ -23,7 +23,7 @@ cdef class Message:
             self._contents = val
 
     def __repr__(self):
-        return 'Message: %s' % self._contents
+        return 'Message: %s' % str(self._contents)
 
     def __str__(self):
         return self.__repr__()
