@@ -1,5 +1,6 @@
 # pxd imports
 from cpython.weakref cimport PyWeakref_NewRef, PyWeakref_GET_OBJECT
+from messages cimport Message
 
 # stdlib imports
 from heapq import heapify, heappush, nsmallest
@@ -37,12 +38,14 @@ cdef class Signal:
         for i in remove_indices:
             heap.pop(i)
 
-    cpdef emit(self, message):
+    cpdef emit(self, Message message):
         cdef list notifiers
         cdef list heap = self._heap
         cdef tuple item
 
         notifiers = nsmallest(len(heap), heap)
+
+        message.initialize()
 
         for item in notifiers:
             notifier = <object>PyWeakref_GET_OBJECT(item[2])
@@ -53,7 +56,11 @@ cdef class Signal:
                     notifier(message)
                 except KillSignalException:
                     break
-    
+                finally:
+                    message.update()
+        
+        message.finalize()
+
     property heap:
 
         def __get__(self):

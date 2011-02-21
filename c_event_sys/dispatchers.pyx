@@ -1,5 +1,6 @@
 # pxd imports
-from signal cimport Signal
+from messages cimport Message
+from signals cimport Signal
 
 # stdlib imports
 from collections import deque
@@ -11,9 +12,10 @@ cdef class QueueDispatcher:
         self._queue = deque() # XXX - use the cgraph.c_collections Queue
         self._working = False
 
-    cpdef dispatch(self, Signal signal, message):
+    cpdef dispatch(self, Signal signal, Message message):
         cdef Signal op_signal
-        
+        cdef Message op_message
+
         queue = self._queue
         queue.append((signal, message))
         
@@ -25,8 +27,8 @@ cdef class QueueDispatcher:
         while queue:
             item = queue.popleft()
             op_signal = <Signal>item[0]
-            messgae = item[1]
-            op_signal.emit(message)
+            op_message = <Message>item[1]
+            op_signal.emit(op_message)
 
         self._working = False
     

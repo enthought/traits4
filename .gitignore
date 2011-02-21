@@ -3,5 +3,5 @@
 *.pyc
 *.so
 *.html
+*.c
 build/
-ctraits.c

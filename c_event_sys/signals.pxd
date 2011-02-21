@@ -1,3 +1,5 @@
+# pxd imports
+from messages cimport Message
 
 
 cdef class Signal:
@@ -9,5 +11,5 @@ cdef class Signal:
 
     cpdef disconnect(self, object)
 
-    cpdef emit(self, object)
+    cpdef emit(self, Message)
 
