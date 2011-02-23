@@ -9,17 +9,24 @@ class KillSignalException(Exception):
 class Signal(object):
 
     def __init__(self):
-        self.heap = []
-        self.conn_count = 0
+        self._heap = []
+        self._conn_count = 0
+        self._notifiers = []
+
+    def _heap_changed(self):
+        heap = self._heap
+        self._notifiers = nsmallest(len(heap), heap)
 
     def connect(self, notifier, priority=16):
-        count = self.conn_count
-        heappush(self.heap, (priority, count, ref(notifier)))
-        self.conn_count = count + 1
+        count = self._conn_count
+        heappush(self._heap, (priority, count, ref(notifier)))
+        self._conn_count = count + 1
+        
+        self._heap_changed()
 
     def disconnect(self, notifier):
         remove_indices = []
-        heap = self.heap
+        heap = self._heap
 
         wr_notifier = ref(notifier)
 
@@ -30,17 +37,19 @@ class Signal(object):
         for i in reversed(remove_indices):
             heap.pop(i)
 
-    def emit(self, message):
-        heap = self.heap
+        self._heap_changed()
 
-        notifiers = nsmallest(len(heap), heap)
+    def emit(self, message):
+        heap = self._heap
+        heap_changed = False
 
         message.initialize()
 
-        for item in notifiers:
+        for item in self._notifiers:
             notifier = item[2]()
             if notifier is None:
                 heap.remove(item)
+                heap_changed = True
             else:
                 try:
                     notifier(message)
@@ -50,4 +59,7 @@ class Signal(object):
                     message.update()
 
         message.finalize()
+
+        if heap_changed:
+            self._heap_changed()
 

@@ -11,9 +11,6 @@ cdef extern from "Python.h":
     int PyObject_GenericSetAttr(PyObject*, PyObject*, PyObject*) except -1
     int PyObject_DelAttr(object, object) except -1
     long PyObject_Hash(object)
-    int PyString_CheckExact(object)
-    
-    PyObject** _PyObject_GetDictPtr(PyObject*)
 
     ctypedef struct PyDictEntry:
         Py_ssize_t me_hash
