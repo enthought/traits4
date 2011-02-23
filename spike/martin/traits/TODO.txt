@@ -1,0 +1,116 @@
+Design Questions
+----------------
+
+- Should False be the default value for 'allow_none' for ALL trait types?
+  - Pros
+    - consistency
+
+  - Cons
+    - For 'Instance', None is currently the default value and 'allow_none'
+      defaults to True.
+
+      We could make Undefined the default value, but then
+      what would you expect here:-
+
+      e.g.
+
+      class Foo(HasTraits):
+          x = Instance(Bar)
+
+      If Undefined is the default value then users of the API will have
+      to check for it...
+
+      Currently, the default value is None and 'allow_none' is True so
+      this works.
+
+  - We could do this:-
+
+    If 'allow_none' is True, then the default value defaults to None.
+    If 'allow_none' is False, then the default value defaults to Undefined
+    which will throw an exception the first time the trait is accessed.
+
+- Do we really like the 'lazy' initialization of traits?
+  - i.e. a trait that is not explicitly initialized in the constructor does
+    not exist in the objects dictionary until it is accessed?
+ 
+  - what if there is some kind of scarce resource, that the object needs, but
+    the trait is not initialized explicitly and so the fact that the resource
+    is not available is only discovered much later when it would have probably
+    been nice to know when the object was created.
+
+  - also it leads to this funny situation:-
+
+    e.g.
+ 
+    class Foo(HasTraits):
+        x = Instance(Bar, default_value=None, allow_none=False)
+
+    Now, obviously this is a case of 'Doctor it hurts when I do this...', but
+    it still is a little weird as an exception isn't thrown until the trait is
+    first accessed which could be well after construction time.
+
+  - if you are lazy loading something then wouldn't you just make it a
+    property? Or we could even have another trait type 'implementation
+    modifier' e.g.
+
+    x = Lazy(Instance(Bar, ())
+
+- Should the 'Property' factory allow for the case where a bare class name
+  can be specified (e.g. Property(Bar) instead of a fully formed trait type
+  e.g. Property(Instance(Bar))?)
+
+- Should the syntax for symbols to be imported use the same as PyProtocols?
+
+  - currently we use 'package.module.Foo'
+  - PyProtocols uses 'package.module:Foo'
+  - ANSWER: Yes and done! It may help with closer PyProtocol integration later
+    on.
+
+- How do we specify keyword arguments to a default value for Instance.
+
+    Currently we just use a tuple which allows positional arguments but not
+    keywords.
+
+    e.g. bar = Instance(Bar, (1, 2, 3))
+
+    But since we are using traits, it would obviously be nice to allow keyword
+    arguments!?!
+
+    e.g. bar = Instance(Bar, default_args=(), default_kw={})?
+
+    What about creating an instance of a subclass (or if the Instance specifies
+    an interface) then we also need the ability to say which class we want to
+    create.
+
+    e.g.
+
+    bar = Instance(IBar, default_class=Bar, default_args=(), default_kw={})
+
+- Do we like the ability to specify default values?!?!
+
+  + It means we mostly don't have to write constructors to put objects into
+    a consistent state when they are constructed.
+
+    - we could of source have a method that we call to do that, but again
+      it would be more work (but maybe more readable?!?)
+
+      e.g. def __initialize__(self): ?
+
+  - we have issues such as delayed error messages etc if the default value
+    is invalid (although that is just poor programming as mentioned above).
+
+  - it possibly cifuses implementation with interface.
+
+    e.g. x = Int(42)
+
+    Seems to imply some '42-ness' about the x trait, whereas it is really
+    just an integer...
+
+- Does 'allow_none' make sense for types other than Instance? Are we really
+  trying to allow an undefined trait?
+ 
+  e.g. x = Int(42, allow_none=True)
+
+  Here I think we are trying to say that we want an integer or some value that
+  indicates that no value has been specified... None just happens to be
+  commonly used for things like this in Python...
