@@ -12,7 +12,7 @@ from enthought.traits.protocols.api import declareImplementation
 from martin.traits.trait_modifier import TraitModifier
 from martin.traits.trait_type import TraitType
 
-print 'object dir', dir(object)
+
 class MetaHasTraits(type):
     """ Example meta-class. """
 

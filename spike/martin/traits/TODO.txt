@@ -1,3 +1,86 @@
+Features
+--------
+
+- Ability to add type information to instance attributes
+- Ability to validate instance attributes
+- Event system
+  - observe when attributes are changed
+  - fire signals/events
+
+- Implemention patterns
+  - delegation
+  - prototype
+
+- Additional typing
+  - interfaces
+  - adaptation
+
+- Component hierarchies?
+  - __parent__
+  - __children__
+  - events can bubble up the hierarchy
+  - 'wiring up' of components
+
+- Traits UI
+  - automatically generate UIs
+
+
+
+http://docs.python.org/reference/datamodel.html#objects-values-and-types
+
+
+- Python type hierarchy
+ - numbers.Integral
+   - int, long, bool
+ - numbers.Real
+   - float
+ - numbers.Complex
+   - complex
+
+ - Sequences
+   - Immutable
+     - str
+     - unicode
+     - tuple
+
+   - Mutable
+     - lists
+     - byte arrays
+
+ - Sets
+   - Immutable
+     = frozen set
+   - Mutable
+     - set
+
+ - Mappings
+  - dict
+
+ - Callable
+  - user defined functions
+  - user defined methods
+  - generator functions
+  - built-in functions
+  - built-in methods
+  - class types
+  - classic classes
+  - class instances (__call__)
+
+ - Modules
+ - Classes
+ - Class instances
+ - Files
+
+ - Internal types
+  - code objects
+  - frame objects
+  - traceback objects
+  - slice objects
+  - static methods
+  - class methods
+
+
+
 Design Questions
 ----------------
 
