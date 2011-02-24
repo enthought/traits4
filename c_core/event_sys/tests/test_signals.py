@@ -66,3 +66,54 @@ def test_total_disconnect():
     s.emit(Message())
     assert res == ['foo', 'foo', 'foo']
 
+
+def test_context():
+    class Foo(object): pass
+    
+    ctxt = Foo()
+    res = []
+    def cb(ctx, msg):
+        res.append(ctx)
+    s = Signal()
+    s.connect(cb, context=ctxt)
+    s.emit(Message(), context=ctxt)
+    assert res[0] is ctxt
+
+
+def test_bound_method_no_call():
+    res = []
+
+    class Foo(object):
+        def cb(self, msg):
+            res.append(msg)
+
+    f = Foo()
+    s = Signal()
+    s.connect(f.cb)
+    s.emit(Message())
+    assert not res
+
+
+def test_bound_method_context():
+    res = []
+    msg = Message()
+
+    class Foo(object):
+        def cb(self, msg):
+            res.append(msg)
+
+    def cb(msg):
+        res.append('foo')
+
+    f = Foo()
+    s = Signal()
+    s.connect(f.cb.im_func, context=f)
+    s.connect(cb)
+
+    s.emit(msg, context=f)
+    assert res == [msg]
+
+    s.emit(msg)
+    assert res == [msg, 'foo']
+
+

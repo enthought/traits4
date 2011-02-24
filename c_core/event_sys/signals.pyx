@@ -3,103 +3,127 @@ from cpython.weakref cimport PyWeakref_NewRef, PyWeakref_GET_OBJECT
 from messages cimport Message
 
 # stdlib imports
-from heapq import heapify, heappush, nsmallest
+from bisect import insort
 
 
 class KillSignalException(Exception):
     pass
 
 
+class _NullContext(object):
+    pass
+
+_null_context = _NullContext()
+
+
+cdef class NotifierManager:
+
+    def __cinit__(self):
+        self._conn_count = 0
+        self._notifiers = []
+
+    def _dead_notifier(self, wr):
+        self._c_dead_notifier(wr)
+
+    cdef _c_dead_notifier(self, wr):
+        cdef list remove = []
+        cdef list notifiers = self._notifiers
+        cdef int i
+        cdef tuple item
+
+        for i, item in enumerate(notifiers):
+            if item[2] == wr:
+                remove.append(i)
+
+        remove.reverse()
+        for i in remove:
+            notifiers.pop(i)
+
+    cpdef add_notifier(self, notifier, priority):
+        cb = self._dead_notifier
+        item = (priority, self._conn_count, PyWeakref_NewRef(notifier, cb))
+        insort(self._notifiers, item)
+        self._conn_count += 1
+
+    cpdef remove_notifier(self, notifier):
+        self._c_dead_notifier(PyWeakref_NewRef(notifier, None))
+
+    cpdef notifiers(self):
+        cdef tuple item
+        cdef list res = []
+        
+        for item in self._notifiers:
+            res.append(<object>PyWeakref_GET_OBJECT(item[2]))
+
+        return res
+    
+
 cdef class Signal:
 
     def __cinit__(self):
-        self._heap = []
-        self._conn_count = 0
-        self._notifiers = []        
+        self._mgrs = {}
 
-    cdef inline _heap_changed(self):
-        # keeps the list of notifiers in sorted sync
-        # with the heap
-        cdef list heap = self._heap
-        self._notifiers = nsmallest(len(heap), heap)
+    def _dead_context(self, wr):
+        del self._mgrs[wr]
 
-    cpdef connect(self, notifier, priority=16):
-        cdef long count = self._conn_count
-        cdef list heap = self._heap
-        heappush(heap, (priority, count, PyWeakref_NewRef(notifier, None)))
-        self._conn_count = count + 1
-
-        self._heap_changed()
-
-    cpdef disconnect(self, notifier):
-        cdef tuple item
-        cdef int i
-        cdef list remove_indices = []
-        cdef list heap = self._heap
-
-        wr_notifier = PyWeakref_NewRef(notifier, None)
-
-        for i, item in enumerate(heap):
-            if item[2] is wr_notifier:
-                remove_indices.append(i)
+    cpdef connect(self, notifier, priority=16, context=_null_context):
+        cdef NotifierManager mgr
+        cdef dict mgrs = self._mgrs
         
-        remove_indices.reverse()
-        for i in remove_indices:
-            heap.pop(i)
+        wr_context = PyWeakref_NewRef(context, self._dead_context)
 
-        self._heap_changed()
+        if wr_context not in mgrs:
+            mgr = NotifierManager()
+            mgrs[wr_context] = mgr
+        else:
+            mgr = mgrs[wr_context]
 
-    cpdef emit(self, Message message):
+        mgr.add_notifier(notifier, priority)
+
+    cpdef disconnect(self, notifier, context=_null_context):
+        cdef NotifierManager mgr
+        cdef dict mgrs = self._mgrs
+        
+        wr_context = PyWeakref_NewRef(context, None)
+
+        if wr_context in mgrs:
+            mgr = mgrs[wr_context]
+            mgr.remove_notifier(notifier)
+
+    cpdef emit(self, Message message, context=_null_context):
+        cdef NotifierManager mgr
         cdef list notifiers
-        cdef list heap = self._heap
-        cdef tuple item
-        cdef bint heap_changed = False
-
-        message.initialize()
-
-        for item in self._notifiers:
-            notifier = <object>PyWeakref_GET_OBJECT(item[2])
-            if notifier is None:
-                heap.remove(item)
-                heap_changed = True
-            else:
-                try:
-                    notifier(message)
-                except KillSignalException:
-                    break
-                finally:
-                    message.update()
+        cdef dict mgrs = self._mgrs
         
-        message.finalize()
+        wr_context = PyWeakref_NewRef(context, None)
 
-        if heap_changed:
-            self._heap_changed()
+        if wr_context in mgrs:
+            mgr = mgrs[wr_context]
+            notifiers = mgr.notifiers()
 
-    # Even though these are exposed, you probably shouldn't mess
-    # with them. They are exposed so they can be used by subclasses.
+            if notifiers:
+                message.initialize()
+                
+                if context is _null_context:
 
-    property heap:
+                    for notifier in notifiers:
+                        try:
+                            notifier(message)
+                        except KillSignalException:
+                            break
+                        finally:
+                            message.update()
 
-        def __get__(self):
-            return self._heap
+                else:
 
-        def __set__(self, list val):
-            self._heap = heapify(val)
-            self._heap_changed()
+                    for notifier in notifiers:
+                        try:
+                            notifier(context, message)
+                        except KillSignalException:
+                            break
+                        finally:
+                            message.update()
 
-    property notifiers:
+                message.finalize()
 
-        def __get__(self):
-            return self._notifiers
-
-        def __set__(self, list val):
-            self._notifiers = val
-
-    property conn_count:
-
-        def __get__(self):
-            return self._conn_count
-
-        def __set__(self, unsigned long val):
-            self._conn_count = val
-
+   
