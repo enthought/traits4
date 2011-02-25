@@ -53,7 +53,7 @@ class NotifierManager(object):
 
 class Signal(object):
     
-    __slots__ = ('_mgrs',)
+    __slots__ = ('_mgrs', '__weakref__')
 
     def __init__(self):
         self._mgrs = WeakKeyDictionary()        
