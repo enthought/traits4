@@ -4,7 +4,7 @@ from ..messages import Message
 
 def test_signal():
     called_msg = []
-    def cb(msg):
+    def cb(msg, ctxt):
         called_msg.append(msg)
     s = Signal()
     s.connect(cb)
@@ -15,11 +15,11 @@ def test_signal():
 
 def test_connect_priority():
     res = []
-    def cb1(msg):
+    def cb1(msg, ctxt):
         res.append('a')
-    def cb2(msg):
+    def cb2(msg, ctxt):
         res.append('b')
-    def cb3(msg):
+    def cb3(msg, ctxt):
         res.append('c')
     s = Signal()
     s.connect(cb1, priority=4)
@@ -42,7 +42,7 @@ def test_connect_priority():
 
 def test_auto_disconnect():
     res = []
-    def cb(msg):
+    def cb(msg, ctxt):
         res.append('foo')
     s = Signal()
     s.connect(cb)
@@ -55,7 +55,7 @@ def test_auto_disconnect():
 
 def test_total_disconnect():
     res = []
-    def cb(msg):
+    def cb(msg, ctxt):
         res.append('foo')
     s = Signal()
     s.connect(cb)
@@ -72,48 +72,11 @@ def test_context():
     
     ctxt = Foo()
     res = []
-    def cb(ctx, msg):
+    def cb(msg, ctx):
         res.append(ctx)
     s = Signal()
     s.connect(cb, context=ctxt)
     s.emit(Message(), context=ctxt)
     assert res[0] is ctxt
-
-
-def test_bound_method_no_call():
-    res = []
-
-    class Foo(object):
-        def cb(self, msg):
-            res.append(msg)
-
-    f = Foo()
-    s = Signal()
-    s.connect(f.cb)
-    s.emit(Message())
-    assert not res
-
-
-def test_bound_method_context():
-    res = []
-    msg = Message()
-
-    class Foo(object):
-        def cb(self, msg):
-            res.append(msg)
-
-    def cb(msg):
-        res.append('foo')
-
-    f = Foo()
-    s = Signal()
-    s.connect(f.cb.im_func, context=f)
-    s.connect(cb)
-
-    s.emit(msg, context=f)
-    assert res == [msg]
-
-    s.emit(msg)
-    assert res == [msg, 'foo']
 
 
