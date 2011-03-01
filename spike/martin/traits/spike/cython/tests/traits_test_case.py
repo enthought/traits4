@@ -22,7 +22,7 @@ class TraitsTestCase(unittest.TestCase):
 
         # fixme: Hack to plug the appropriate implementation into the meta
         # class for 'HasTraits'...
-        meta_has_traits.MetaHasTraits.implementation = self.module
+        meta_has_traits.MetaHasTraits.implementation = self.implementation
 
         return
 
@@ -46,15 +46,15 @@ class TraitsTestCase(unittest.TestCase):
             return stop - start
 
         print
-        print self.module.VERSION, 'takes...',
-        print timeit(self.module.Int())
+        print self.implementation.VERSION, 'took',
+        print timeit(self.implementation.Int())
 
         return
 
     def test_attribute_access_speed(self):
 
-        class Foo(self.module.HasTraits):
-            x = self.module.Int()
+        class Foo(self.implementation.HasTraits):
+            x = self.implementation.Int()
 
         f = Foo()
         f.x = 42
@@ -68,14 +68,14 @@ class TraitsTestCase(unittest.TestCase):
             return stop - start
 
         print
-        print self.module.VERSION, 'took', timeit()
+        print self.implementation.VERSION, 'took', timeit()
 
         return
 
     def test_attribute_validation_speed(self):
 
-        class Foo(self.module.HasTraits):
-            x = self.module.Int()
+        class Foo(self.implementation.HasTraits):
+            x = self.implementation.Int()
 
         f = Foo()
         f.x = 42
@@ -86,7 +86,7 @@ class TraitsTestCase(unittest.TestCase):
 ##                 try:
 ##                     f.x = 'X'
 
-##                 except self.module.TraitError:
+##                 except self.implementation.TraitError:
 ##                     pass
                 f.x = 10
             stop = time.time()
@@ -94,10 +94,10 @@ class TraitsTestCase(unittest.TestCase):
             return stop - start
 
         print
-        print self.module.VERSION, 'took', timeit()
+        print self.implementation.VERSION, 'took', timeit()
 
         self.failUnlessRaises(
-            self.module.TraitError, setattr, f, 'x', 'I am not an int!'
+            self.implementation.TraitError, setattr, f, 'x', 'I am not an int!'
         )
             
         return
@@ -109,7 +109,7 @@ class PythonTraitsTestCase(TraitsTestCase):
     __test__ = True
 
     # The traits implementation to test.
-    module = python_traits
+    implementation = python_traits
 
 
 class CythonTraitsTestCase(TraitsTestCase):
@@ -118,6 +118,6 @@ class CythonTraitsTestCase(TraitsTestCase):
     __test__ = True
 
     # The traits implementation to test.
-    module = cython_traits
+    implementation = cython_traits
     
 #### EOF ######################################################################
