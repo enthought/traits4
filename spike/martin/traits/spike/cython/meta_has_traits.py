@@ -1,3 +1,5 @@
+""" Metaclasss for 'HasTraits'. """
+
 
 class MetaHasTraits(type):
     """ Metaclasss for 'HasTraits'.
@@ -8,6 +10,9 @@ class MetaHasTraits(type):
 
     """
 
+    # fixme: This is only required because we want to switch between the Cython
+    # and pure Python implementations for testing and comparison. It should
+    # be set to the *module* that contains the appropriate version.
     implementation = None
     
     def __new__(cls, name, bases, dict):
