@@ -4,6 +4,7 @@
 import time, unittest
 
 from martin.traits.spike.cython import cython_traits
+from martin.traits.spike.cython import cython_traits_with_accessors
 from martin.traits.spike.cython import python_traits
 from martin.traits.spike.cython import meta_has_traits
 
@@ -104,7 +105,7 @@ class TraitsTestCase(unittest.TestCase):
 
 
 class PythonTraitsTestCase(TraitsTestCase):
-    """ Tests to work out how to use Cython for Trait types! """
+    """ The pure Python implementation. """
 
     __test__ = True
 
@@ -113,11 +114,20 @@ class PythonTraitsTestCase(TraitsTestCase):
 
 
 class CythonTraitsTestCase(TraitsTestCase):
-    """ Tests to work out how to use Cython for Trait types! """
+    """ A Cython version of the pure Python version. """
 
     __test__ = True
 
     # The traits implementation to test.
     implementation = cython_traits
+
+
+class CythonTraitsWithAccessorsTestCase(TraitsTestCase):
+    """ A Cython version using accessors. """
+
+    __test__ = True
+
+    # The traits implementation to test.
+    implementation = cython_traits_with_accessors
     
 #### EOF ######################################################################

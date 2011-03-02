@@ -61,21 +61,30 @@ class MetaHasTraits(type):
             # a) A class derived from 'TraitType'
             if MetaHasTraits.is_trait_type_class(value):
                 trait_type = value()
-                # The descriptor protocol doesn't pass in the name of the
-                # attribute being accessed (IMHO this is a major flaw in the
-                # descriptor API), so we have to set the name of the trait
-                # here.
-                trait_type.name = name
-                traits[name] = trait_type
                 
             # b) An instance of a class derived from 'TraitType'
             elif isinstance(value, cls.implementation.TraitType):
                 trait_type = value
-                # The descriptor protocol doesn't pass in the name of the
-                # attribute being accessed (IMHO this is a major flaw in the
-                # descriptor API), so we have to set the name of the trait
-                # here.
-                trait_type.name = name
+
+            # c) Some other class attribute that we don't care about!
+            else:
+                trait_type = None
+                
+            if trait_type is not None:
+                # Give the metaclass chance to wrap the trait type (used in the
+                # accessor implementation).
+                if hasattr(cls.implementation, 'trait_type_wrapper'):
+                    dict[name] = cls.implementation.trait_type_wrapper(
+                        name, trait_type
+                    )
+
+                else:
+                    # The descriptor protocol doesn't pass in the name of the
+                    # attribute being accessed (IMHO this is a major flaw in
+                    # the descriptor API), so we have to set the name of the
+                    # trait here.
+                    trait_type.name = name
+
                 traits[name] = trait_type
                 
         return traits
