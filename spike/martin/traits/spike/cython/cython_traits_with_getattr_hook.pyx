@@ -103,7 +103,12 @@ cdef class CHasTraits:
         # Otherwise, this is just a regular Python attribute so let Python do
         # its thang.
         else:
-            object.__setattr__(self, name, value)
+            #object.__setattr__(self, name, value)
+
+            # This will properly propagate to the __set__
+            # method if the attribute is a class-level
+            # data descriptor.
+            PyObject_GenericSetAttr(<PyObject*>self, <PyObject*>name, <PyObject*>value)
             
         return
 

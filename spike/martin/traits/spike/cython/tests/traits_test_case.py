@@ -171,15 +171,13 @@ class TraitsTestCase(unittest.TestCase):
 
     def test_traits_does_not_intefere_with_other_descriptors(self):
 
+        print
+        
         for traits in IMPLEMENTATIONS:
-
-            if traits == cython_traits_with_getattr_hook:
-                continue
+            set_implementation(traits)
 
             print traits.VERSION
             
-            set_implementation(traits)
-
             class MyDescriptor(object):
                 def __get__(self, obj, cls):
                     return obj.my_descriptor_value
