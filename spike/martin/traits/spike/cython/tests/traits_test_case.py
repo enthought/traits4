@@ -3,12 +3,51 @@
 
 import time, unittest
 
+from enthought.traits import api as old_traits
 from martin.traits.spike.cython import cython_traits
 from martin.traits.spike.cython import cython_traits_with_accessors
 from martin.traits.spike.cython import python_traits
 from martin.traits.spike.cython import meta_has_traits
 
 
+# Old traits doesn't have a version identifier!
+old_traits.VERSION = 'Traits 3'
+
+IMPLEMENTATIONS = [
+    old_traits,
+    python_traits,
+    cython_traits,
+    cython_traits_with_accessors
+]
+
+def set_implementation(implementation):
+    """ Set the current traits implementation.
+
+    fixme: Hack to plug the appropriate implementation into the meta
+    class for 'HasTraits'...
+
+    """
+    
+    meta_has_traits.MetaHasTraits.implementation = implementation
+
+    return
+
+
+def timeit(fn):
+    start = time.time()
+    fn()
+    stop = time.time()
+
+    return stop - start
+
+
+def print_results(results):
+    for version, speed in sorted(results, key=lambda x: x[1]):
+        print '%-20s' % version, '\t', speed
+
+    return 
+
+    
 class TraitsTestCase(unittest.TestCase):
     """ Tests to work out how to use Cython for Trait types! """
 
@@ -20,10 +59,6 @@ class TraitsTestCase(unittest.TestCase):
 
     def setUp(self):
         """ Prepares the test fixture before each test method is called. """
-
-        # fixme: Hack to plug the appropriate implementation into the meta
-        # class for 'HasTraits'...
-        meta_has_traits.MetaHasTraits.implementation = self.implementation
 
         return
 
@@ -37,97 +72,99 @@ class TraitsTestCase(unittest.TestCase):
     ###########################################################################
 
     def test_standalone_validation_speed(self):
-        
-        def timeit(trait_type, N=pow(10, 6)):
-            start = time.time()
-            for i in range(N):
-                trait_type.validate(i)
-            stop = time.time()
-
-            return stop - start
 
         print
-        print self.implementation.VERSION, 'took',
-        print timeit(self.implementation.Int())
 
+        results = []
+        for traits in IMPLEMENTATIONS:
+            # Old traits has a different API here...
+            if traits is old_traits:
+                continue
+            
+            set_implementation(traits)
+
+            def fn(N=pow(10, 6)):
+                for i in range(N):
+                    traits.Int().validate(i)
+
+            results.append((traits.VERSION, timeit(fn)))
+
+        print_results(results)
+        
         return
 
     def test_attribute_access_speed(self):
 
-        class Foo(self.implementation.HasTraits):
-            x = self.implementation.Int()
+        print
 
-        f = Foo()
-        f.x = 42
+        results = []
+        for traits in IMPLEMENTATIONS:
+            set_implementation(traits)
 
-        def timeit(N=pow(10, 6)):
-            start = time.time()
-            for i in range(N):
-                x = f.x
-            stop = time.time()
+            class Foo(traits.HasTraits):
+                x = traits.Int()
 
-            return stop - start
+            f = Foo()
+            f.x = 42
+
+            def fn(N=pow(10, 6)):
+                for i in range(N):
+                    x = f.x
+
+            results.append((traits.VERSION, timeit(fn)))
+
+        print_results(results)
+        
+        return
+
+    def test_valid_attribute_validation_speed(self):
 
         print
-        print self.implementation.VERSION, 'took', timeit()
+
+        results = []
+        for traits in IMPLEMENTATIONS:
+            set_implementation(traits)
+
+            class Foo(traits.HasTraits):
+                x = traits.Int()
+
+            f = Foo()
+            f.x = 42
+
+            def fn(N=pow(10, 6)):
+                for i in range(N):
+                    f.x = i
+
+            results.append((traits.VERSION, timeit(fn)))
+                           
+        print_results(results)
 
         return
 
-    def test_attribute_validation_speed(self):
-
-        class Foo(self.implementation.HasTraits):
-            x = self.implementation.Int()
-
-        f = Foo()
-        f.x = 42
-
-        def timeit(N=pow(10, 6)):
-            start = time.time()
-            for i in range(N):
-##                 try:
-##                     f.x = 'X'
-
-##                 except self.implementation.TraitError:
-##                     pass
-                f.x = 10
-            stop = time.time()
-
-            return stop - start
+    def test_invalid_attribute_validation_speed(self):
 
         print
-        print self.implementation.VERSION, 'took', timeit()
 
-        self.failUnlessRaises(
-            self.implementation.TraitError, setattr, f, 'x', 'I am not an int!'
-        )
-            
+        results = []
+        for traits in IMPLEMENTATIONS:
+            set_implementation(traits)
+
+            class Foo(traits.HasTraits):
+                x = traits.Int()
+
+            f = Foo()
+            f.x = 42
+
+            def fn(N=pow(10, 4)):
+                for i in range(N):
+                    self.failUnlessRaises(
+                        traits.TraitError, setattr, f, 'x', 'I am not an int!'
+                    )
+
+            results.append((traits.VERSION, timeit(fn)))
+
+        print_results(results)
+        
         return
 
-
-class PythonTraitsTestCase(TraitsTestCase):
-    """ The pure Python implementation. """
-
-    __test__ = True
-
-    # The traits implementation to test.
-    implementation = python_traits
-
-
-class CythonTraitsTestCase(TraitsTestCase):
-    """ A Cython version of the pure Python version. """
-
-    __test__ = True
-
-    # The traits implementation to test.
-    implementation = cython_traits
-
-
-class CythonTraitsWithAccessorsTestCase(TraitsTestCase):
-    """ A Cython version using accessors. """
-
-    __test__ = True
-
-    # The traits implementation to test.
-    implementation = cython_traits_with_accessors
-    
 #### EOF ######################################################################
