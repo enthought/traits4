@@ -6,6 +6,7 @@ import time, unittest
 from enthought.traits import api as old_traits
 from martin.traits.spike.cython import cython_traits
 from martin.traits.spike.cython import cython_traits_with_accessors
+from martin.traits.spike.cython import cython_traits_with_getattr_hook
 from martin.traits.spike.cython import python_traits
 from martin.traits.spike.cython import meta_has_traits
 
@@ -13,12 +14,15 @@ from martin.traits.spike.cython import meta_has_traits
 # Old traits doesn't have a version identifier!
 old_traits.VERSION = 'Traits 3'
 
+
 IMPLEMENTATIONS = [
     old_traits,
     python_traits,
     cython_traits,
-    cython_traits_with_accessors
+    cython_traits_with_accessors,
+    cython_traits_with_getattr_hook
 ]
+
 
 def set_implementation(implementation):
     """ Set the current traits implementation.
@@ -33,9 +37,9 @@ def set_implementation(implementation):
     return
 
 
-def timeit(fn):
+def timeit(fn, N=pow(10, 6)):
     start = time.time()
-    fn()
+    fn(N)
     stop = time.time()
 
     return stop - start
@@ -51,8 +55,6 @@ def print_results(results):
 class TraitsTestCase(unittest.TestCase):
     """ Tests to work out how to use Cython for Trait types! """
 
-    __test__ = False
-    
     ###########################################################################
     # 'TestCase' interface.
     ###########################################################################
@@ -83,7 +85,7 @@ class TraitsTestCase(unittest.TestCase):
             
             set_implementation(traits)
 
-            def fn(N=pow(10, 6)):
+            def fn(N):
                 for i in range(N):
                     traits.Int().validate(i)
 
@@ -107,7 +109,7 @@ class TraitsTestCase(unittest.TestCase):
             f = Foo()
             f.x = 42
 
-            def fn(N=pow(10, 6)):
+            def fn(N):
                 for i in range(N):
                     x = f.x
 
@@ -131,7 +133,7 @@ class TraitsTestCase(unittest.TestCase):
             f = Foo()
             f.x = 42
 
-            def fn(N=pow(10, 6)):
+            def fn(N):
                 for i in range(N):
                     f.x = i
 
@@ -155,16 +157,45 @@ class TraitsTestCase(unittest.TestCase):
             f = Foo()
             f.x = 42
 
-            def fn(N=pow(10, 4)):
+            def fn(N):
                 for i in range(N):
-                    self.failUnlessRaises(
+                    self.assertRaises(
                         traits.TraitError, setattr, f, 'x', 'I am not an int!'
                     )
 
-            results.append((traits.VERSION, timeit(fn)))
+            results.append((traits.VERSION, timeit(fn, N=pow(10, 3))))
 
         print_results(results)
         
         return
 
+    def test_traits_does_not_intefere_with_other_descriptors(self):
+
+        for traits in IMPLEMENTATIONS:
+
+            if traits == cython_traits_with_getattr_hook:
+                continue
+
+            print traits.VERSION
+            
+            set_implementation(traits)
+
+            class MyDescriptor(object):
+                def __get__(self, obj, cls):
+                    return obj.my_descriptor_value
+
+                def __set(self, obj, value):
+                    obj.my_descriptor_value = value
+                    return
+                
+            class Foo(traits.HasTraits):
+                y = MyDescriptor()
+
+            f = Foo()
+            f.y = 99
+
+            self.assertEqual(99, f.y)
+
+        return
+        
 #### EOF ######################################################################

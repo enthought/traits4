@@ -35,7 +35,7 @@ class MetaHasTraits(type):
 
         # Attach the trait namespace?
         klass.__traits__ = traits
-        
+
         return klass
 
     ###########################################################################
@@ -74,10 +74,12 @@ class MetaHasTraits(type):
                 # Give the metaclass chance to wrap the trait type (used in the
                 # accessor implementation).
                 if hasattr(cls.implementation, 'trait_type_wrapper'):
-                    dict[name] = cls.implementation.trait_type_wrapper(
+                    trait_type = cls.implementation.trait_type_wrapper(
                         name, trait_type
                     )
 
+                    dict[name] = trait_type
+                    
                 else:
                     # The descriptor protocol doesn't pass in the name of the
                     # attribute being accessed (IMHO this is a major flaw in
@@ -86,7 +88,12 @@ class MetaHasTraits(type):
                     trait_type.name = name
 
                 traits[name] = trait_type
-                
+
+                # If the implementation hooks the 'getattr' mechanism, then
+                # we need to remove the trait type from the class dictionary.
+                if hasattr(cls.implementation, 'hooks_getattr'):
+                    del dict[name]
+                    
         return traits
 
     @classmethod
