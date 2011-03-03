@@ -104,9 +104,9 @@ cdef class CHasTraits:
         """ Sets the value of an attribute on the object. """
 
         cdef PyDictObject* traits = <PyDictObject*>self.traits
-        hash_ = (<PyStringObject*>name).ob_shash
         cdef PyObject* trait_type
         
+        hash_ = (<PyStringObject*>name).ob_shash
         if hash_ == -1:
             hash_ = PyObject_Hash(name)
         trait_type = traits.ma_lookup(traits, name, hash_).me_value
