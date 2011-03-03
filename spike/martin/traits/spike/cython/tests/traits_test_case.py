@@ -163,7 +163,7 @@ class TraitsTestCase(unittest.TestCase):
                         traits.TraitError, setattr, f, 'x', 'I am not an int!'
                     )
 
-            results.append((traits.VERSION, timeit(fn, N=pow(10, 3))))
+            results.append((traits.VERSION, timeit(fn, N=pow(10, 4))))
 
         print_results(results)
         

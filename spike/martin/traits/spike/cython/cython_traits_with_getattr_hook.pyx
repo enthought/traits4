@@ -38,12 +38,14 @@ cdef class CHasTraits:
 
     cdef dict obj_dict
     cdef dict itrait_dict
-
+    cdef dict traits
+    
     def __cinit__(self):
         # grab a reference to the object's dict
         # need to call the generic getattr here because 
         # __getattribute__ depends on this dict existing
         self.obj_dict = <dict>PyObject_GenericGetAttr(self, '__dict__')
+        self.traits = <dict>PyObject_GenericGetAttr(self, '__traits__')
 
     def __getattribute__(self, bytes name):
         # short circuit the normal lookup chain if the value
@@ -53,6 +55,7 @@ cdef class CHasTraits:
         cdef PyDictObject* dct = <PyDictObject*>self.obj_dict
         cdef long hash_
         cdef PyObject* value
+        cdef PyDictObject* traits = <PyDictObject*>self.traits
     
         # This hack is basically just the innards of PyDict_GetItem.
         # The ~25% performance improvement (87ns vs 64ns) comes 
@@ -64,6 +67,13 @@ cdef class CHasTraits:
         value = dct.ma_lookup(dct, name, hash_).me_value
         if value != NULL:
             return <object>value
+
+        # fixme: Here we need to see if there is a trait type with this name
+        # and if so use it to get the default value...
+        value = traits.ma_lookup(traits, name, hash_).me_value
+        if value != NULL:
+            print 'Get the default value!'
+            return 42
     
         # This will properly propagate to the __get__ method
         # if the attribute is a class-level data descriptor.
@@ -93,22 +103,37 @@ cdef class CHasTraits:
     def __setattr__(self, name, value):
         """ Sets the value of an attribute on the object. """
 
-        trait_type = self.__traits__.get(name, None)
+        cdef PyDictObject* traits = <PyDictObject*>self.traits
+        hash_ = (<PyStringObject*>name).ob_shash
+        cdef PyObject* trait_type
         
-        # If the object has a trait with the specified name then use the
-        # corresponding trait type to set the value.
-        if trait_type is not None:
-            self.__dict__[name] = trait_type.validate(value)
+        if hash_ == -1:
+            hash_ = PyObject_Hash(name)
+        trait_type = traits.ma_lookup(traits, name, hash_).me_value
+        if trait_type != NULL:
+            #print '-------------', trait_type
+            self.obj_dict[name] = (<TraitType>trait_type).validate(value)
 
-        # Otherwise, this is just a regular Python attribute so let Python do
-        # its thang.
         else:
-            #object.__setattr__(self, name, value)
-
             # This will properly propagate to the __set__
             # method if the attribute is a class-level
             # data descriptor.
-            PyObject_GenericSetAttr(<PyObject*>self, <PyObject*>name, <PyObject*>value)
+            PyObject_GenericSetAttr(
+                <PyObject*>self, <PyObject*>name, <PyObject*>value
+            )
+
+##         trait_type = self.__traits__.get(name, None)
+        
+##         # If the object has a trait with the specified name then use the
+##         # corresponding trait type to set the value.
+##         if trait_type is not None:
+##             self.__dict__[name] = trait_type.validate(value)
+
+##         # Otherwise, this is just a regular Python attribute so let Python do
+##         # its thang.
+##         else:
+##             #object.__setattr__(self, name, value)
+
             
         return
 
@@ -129,7 +154,7 @@ cdef class TraitType:
     # descriptor protocol.
     cdef public bytes name
 
-    cpdef validate(TraitType self, object value):
+    cpdef inline validate(TraitType self, object value):
         """ Validate the given value.
 
         Raise a TraitError if the value is not valid for this type.
