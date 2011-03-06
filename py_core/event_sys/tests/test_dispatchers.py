@@ -12,18 +12,18 @@ class TestDispatchers(object):
         s2 = Signal()
         s3 = Signal()
 
-        def cb1(msg, ctxt):
+        def cb1(msg):
             res.append('foo')
             dispatcher.dispatch(s2, msg)
             dispatcher.dispatch(s3, msg)
             res.append('foo2')
 
-        def cb2(msg, ctxt):
+        def cb2(msg):
             res.append('bar')
             dispatcher.dispatch(s3, msg)
             res.append('bar2')
 
-        def cb3(msg, ctxt):
+        def cb3(msg):
             res.append('baz')
 
         s1.connect(cb1)

@@ -4,7 +4,7 @@ from ..messages import Message
 
 def test_signal():
     called_msg = []
-    def cb(msg, ctxt):
+    def cb(msg):
         called_msg.append(msg)
     s = Signal()
     s.connect(cb)
@@ -13,13 +13,13 @@ def test_signal():
     assert called_msg[0] is msg
 
 
-def test_connect_priority():
+def test_priority():
     res = []
-    def cb1(msg, ctxt):
+    def cb1(msg):
         res.append('a')
-    def cb2(msg, ctxt):
+    def cb2(msg):
         res.append('b')
-    def cb3(msg, ctxt):
+    def cb3(msg):
         res.append('c')
     s = Signal()
     s.connect(cb1, priority=4)
@@ -42,7 +42,7 @@ def test_connect_priority():
 
 def test_auto_disconnect():
     res = []
-    def cb(msg, ctxt):
+    def cb(msg):
         res.append('foo')
     s = Signal()
     s.connect(cb)
@@ -55,7 +55,7 @@ def test_auto_disconnect():
 
 def test_total_disconnect():
     res = []
-    def cb(msg, ctxt):
+    def cb(msg):
         res.append('foo')
     s = Signal()
     s.connect(cb)
@@ -72,11 +72,54 @@ def test_context():
     
     ctxt = Foo()
     res = []
-    def cb(msg, ctx):
-        res.append(ctx)
+    def cb(msg):
+        res.append(msg.signal.ctxt)
     s = Signal()
-    s.connect(cb, context=ctxt)
-    s.emit(Message(), context=ctxt)
+    with s.context(ctxt):
+        s.connect(cb)
+    with s.context(ctxt):    
+        s.emit(Message())
     assert res[0] is ctxt
 
+
+def test_blocking():
+    res = []
+    def cb1(msg):
+        res.append('cb1')
+    def cb2(msg):
+        res.append('cb2')
+    def cb3(msg):
+        res.append('cb3')
+    s = Signal()
+    s.connect(cb1)
+    s.connect(cb2)
+    s.connect(cb3)
+    s.emit(Message())
+    s.block(cb1, cb2)
+    s.emit(Message())
+    s.block(cb3)
+    s.unblock(cb1, cb2)
+    s.emit(Message())
+    s.unblock(cb3)
+    s.emit(Message())
+    assert res == ['cb1', 'cb2', 'cb3', 'cb3', 'cb1', 'cb2', 'cb1', 'cb2', 'cb3']
+
+
+def test_blocking_context():
+    res = []
+    def cb1(msg):
+        res.append('cb1')
+    def cb2(msg):
+        res.append('cb2')
+    def cb3(msg):
+        res.append('cb3')
+    s = Signal()
+    s.connect(cb1)
+    s.connect(cb2)
+    s.connect(cb3)
+    s.emit(Message())
+    with s.blocking(cb1, cb3):
+        s.emit(Message())
+    s.emit(Message())
+    assert res == ['cb1', 'cb2', 'cb3', 'cb2', 'cb1', 'cb2', 'cb3']
 

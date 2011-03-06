@@ -4,7 +4,7 @@ from ..messages import Message
 
 def test_message():
     res = []
-    def cb(msg, ctxt):
+    def cb(msg):
         res.append(msg.contents)
     s = Signal()
     s.connect(cb)

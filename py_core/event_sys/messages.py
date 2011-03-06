@@ -4,7 +4,8 @@ class Message(object):
 
     def __init__(self, contents=None):
         self.contents = contents
-
+        self.signal = None # will be set when the signal is emmitted
+        
     def initialize(self):
         pass
 
@@ -15,7 +16,7 @@ class Message(object):
         pass
 
     def __repr__(self):
-        return 'Message: %s' % str(self.contents)
+        return '%s: %s' % (self.__class__.__name__, str(self.contents))
 
     def __str__(self):
         return self.__repr__()
