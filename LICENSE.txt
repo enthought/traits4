@@ -1,5 +1,3 @@
-BSD 3-Clause License
-
 (C) Copyright 2011-2021 Enthought, Inc., Austin, TX
 All rights reserved.
 
